@@ -1,197 +1,56 @@
-import { createOpenAI } from '@ai-sdk/openai'
-import { Message, useChat } from '@ai-sdk/solid'
-import { invoke } from '@tauri-apps/api/core'
-import { fetch as rawTauriFetch } from '@tauri-apps/plugin-http'
-import { streamText, tool, ToolInvocation } from 'ai'
-import { For } from 'solid-js'
-import { z } from 'zod'
-
-export type ToolInvocationWithResult<T = object> = ToolInvocation & {
-  result: T
-}
-
-const user = {
-  first_name: 'John',
-  last_name: 'Doe',
-  email: 'john.doe@example.com',
-}
-
-const p2 = `
-  You are a helpful executive assistant that assists users with their email and calendar.
-  
-  The current date and time is ${new Date().toISOString()}.
-
-  The current user is ${user.first_name} ${user.last_name} (${user.email}).
-  
-  Call the "search" tool once to search the user's inbox and contacts for relevant information.
-  
-  Some of these documents may not be relevant to the user's question. It is your job to read through the content of the results to decide if they are relevant.
-  
-  If none of the search results are relevant, that's ok, but you don't need to search again.
-  
-  If you are unable to answer the user's question based on the search results, just say so. Do not make up an answer.
-  
-  Call the "answer" tool to provide your final response to the user. Example:
-  
-  {
-    "text": "I found several Postmark receipts in your inbox. Here are the details of the receipts:",
-    "results": [
-      {
-        "id": "gmail/1234567890",
-        "type": "message"
-      },
-      {
-        "id": "gmail/1234567891",
-        "type": "message"
-      },
-      {
-        "id": "gmail/1234567892",
-        "type": "thread"
-      },
-      {
-        "id": "2026780c-8af3-4d02-91dc-36a62a7413e2",
-        "type": "contact"
-      }
-    ]
-  }
-
-  Note: you need to include the "gmail/" prefix for message and thread ids.
-  `
-
-const tauriFetch = async (url: RequestInfo | URL, options: RequestInit) => {
-  console.log('tauriFetch', url, options)
-  return rawTauriFetch(url, options)
-}
-
-const ollama = createOpenAI({
-  baseURL: 'http://localhost:11434/v1',
-
-  fetch: async (input: RequestInfo | URL, init: RequestInit = {}) => {
-    console.log('tauri fetch', input, init)
-    return tauriFetch(input, init)
-  },
-  // compatibility: 'compatible',
-  apiKey: 'ollama',
-})
-
-const fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
-  const openaiApiKey = await invoke('get_openai_api_key')
-
-  console.log('openaiApiKey', openaiApiKey)
-  const openai = createOpenAI({
-    fetch: async (input: RequestInfo | URL, init: RequestInit = {}) => {
-      console.log('tauri fetch', input, init)
-      return tauriFetch(input, init)
-    },
-    apiKey: await invoke('get_openai_api_key'),
-  })
-
-  console.log('fetch', input, init)
-
-  const options = init as RequestInit & { body: string }
-  const body = JSON.parse(options.body)
-
-  const { messages } = body as { messages: Message[] }
-
-  const processedMessages = messages.map((message) => ({
-    ...message,
-    parts: message.parts?.map((part) => {
-      if (part.type === 'tool-invocation' && !(part.toolInvocation as ToolInvocationWithResult).result) {
-        return {
-          ...part,
-          toolInvocation: {
-            ...part.toolInvocation,
-            result: true,
-          },
-        }
-      }
-      return part
-    }),
-  }))
-
-  const result = streamText({
-    maxSteps: 5,
-    // Currently llama is able to call the search tool, but it does not call the answer tool afterwards - need to debug why.
-    // model: ollama('llama3.2:3b-instruct-q4_1', {
-    //   structuredOutputs: true,
-    // }),
-    model: openai('gpt-4o', {
-      structuredOutputs: true,
-    }),
-    system: p2,
-    messages: processedMessages,
-    // toolCallStreaming: true, // Causes issues because this results in incomplete result objects getting passed to React components. Experimentation to block rendering until the full objects are available is needed.
-    tools: {
-      search: tool({
-        description: "A tool for searching the user's inbox.",
-        parameters: z.object({
-          query: z.string().describe("The query to search the user's inbox with."),
-          originalUserMessage: z.string().describe('The original user message that triggered this tool call.'),
-        }),
-        execute: async ({ query, originalUserMessage }) => {
-          // @todo
-          return 'No results found.'
-        },
-      }),
-      answer: tool({
-        description: 'Provide your final response to the user.',
-        parameters: z.object({
-          text: z.string().describe('The verbal response to the user. Do not list anything here.'),
-          results: z.array(z.string()),
-        }),
-        // Important: Do NOT have an execute function otherwise it will call this tool multiple times.
-        // But: it is helpful for debugging :)
-        // execute: async ({ text, results }) => {
-        //   console.log('answer', text, results)
-        // },
-      }),
-    },
-    onFinish: async () => {
-      // console.log('done', result.reasoning, result.finishReason, result.warnings, result.text, result.toolResults)
-    },
-    toolChoice: 'required',
-  })
-
-  return result.toDataStreamResponse()
-}
+import { normalizeProps, useMachine } from '@zag-js/solid'
+import * as splitter from '@zag-js/splitter'
+import { createMemo, createSignal, createUniqueId } from 'solid-js'
+import './App.css'
+import Chat from './Chat'
 
 export default function App() {
-  const { messages, input, handleInputChange, handleSubmit } = useChat({
-    fetch,
-    maxSteps: 5,
-    // streamProtocol: 'text',
+  const [expanded, setExpanded] = createSignal(false)
+
+  const service = useMachine(splitter.machine, {
+    id: createUniqueId(),
+    orientation: 'horizontal',
+    defaultSize: [
+      { id: 'a', size: 30, minSize: 10, maxSize: 50 },
+      { id: 'b', size: 70, minSize: 50, maxSize: 90 },
+    ],
   })
 
-  // console.log('messages', messages())
+  const api = createMemo(() => splitter.connect(service, normalizeProps))
+
+  const togglePanel = () => {
+    setExpanded((prev) => !prev)
+  }
 
   return (
-    <div class="chat-container">
-      <div class="messages">
-        <For each={messages()}>
-          {(message, i) => (
-            <div class={`message ${message.role}`}>
-              <For each={message.parts.filter((part) => part.type === 'tool-invocation')}>
-                {(part) => {
-                  const { toolName, toolCallId, args } = part.toolInvocation
-                  console.log('toolName', part.toolInvocation)
-                  return (
-                    <div>
-                      {message.role}
-                      <div>{args.text}</div>
-                      {/* <div>{JSON.stringify(args)}</div> */}
-                    </div>
-                  )
-                }}
-              </For>
-            </div>
-          )}
-        </For>
-      </div>
+    <div class="flex flex-col h-screen bg-gray-100">
+      <header class="bg-indigo-600 text-white p-4 shadow-md flex justify-between items-center">
+        <h1 class="text-2xl font-bold">Split Pane Demo</h1>
+        <div class="flex gap-2">
+          <button onClick={togglePanel} class="bg-white text-indigo-600 px-4 py-2 rounded-md hover:bg-indigo-100 transition-colors font-medium">
+            {expanded() ? 'Hide' : 'Show'} Sidebar
+          </button>
+        </div>
+      </header>
 
-      <form onSubmit={handleSubmit}>
-        <input value={input()} onInput={handleInputChange} placeholder="Say something..." />
-        <button type="submit">Send</button>
-      </form>
+      <div class="flex flex-row flex-1 overflow-hidden" {...api().getRootProps()}>
+        <div class="overflow-auto p-4 bg-white" {...api().getPanelProps({ id: 'a' })}>
+          <div class="h-full rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+            <div class="text-center">
+              <h2 class="text-xl font-semibold text-gray-700">Left Panel</h2>
+              <p class="text-gray-500 mt-2">Content for panel A goes here</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="w-1.5 bg-gray-200 hover:bg-indigo-400 transition-colors cursor-col-resize flex items-center justify-center" {...api().getResizeTriggerProps({ id: 'a:b' })}>
+          <div class="w-0.5 h-8 bg-gray-400"></div>
+        </div>
+
+        <div class="overflow-auto p-4 bg-white" {...api().getPanelProps({ id: 'b' })}>
+          <Chat />
+        </div>
+      </div>
     </div>
   )
 }
