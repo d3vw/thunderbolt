@@ -20,6 +20,7 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-http": "^2.3.0",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-process": "^2.2.0",
     "@tauri-apps/plugin-websocket": "^2.3.0",
     "@zag-js/solid": "^1.2.0",
     "@zag-js/splitter": "^1.2.0",

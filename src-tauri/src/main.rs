@@ -41,6 +41,7 @@ async fn main() -> Result<()> {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_websocket::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![get_openai_api_key,]);
 
     #[cfg(debug_assertions)]

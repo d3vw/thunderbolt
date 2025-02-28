@@ -91,6 +91,7 @@ tauri-plugin-websocket = "2"
 tokio-stream = "0.1.17"
 futures = "0.3.31"
 http = "1.2.0"
+tauri-plugin-process = "2"
 
 [profile.dev]
 incremental = true # Compile your binary in smaller steps.
