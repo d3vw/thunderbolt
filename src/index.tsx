@@ -1,16 +1,14 @@
 import { Route, Router } from '@solidjs/router'
-import { lazy } from 'solid-js'
 import { render } from 'solid-js/web'
-import App from './App'
-
-const Main = lazy(() => import('./Home'))
-const Settings = lazy(() => import('./Settings'))
-const NotFound = lazy(() => import('./NotFound'))
+import Home from './home'
+import App from './layout'
+import NotFound from './not-found'
+import Settings from './settings'
 
 render(
   () => (
     <Router root={App}>
-      <Route path="/" component={Main} />
+      <Route path="/" component={Home} />
       <Route path="/settings" component={Settings} />
       <Route path="*404" component={NotFound} />
     </Router>

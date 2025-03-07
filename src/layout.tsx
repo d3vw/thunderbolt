@@ -1,10 +1,10 @@
+import './index.css'
+
 import { JSXElement, onMount } from 'solid-js'
 
-import { createTray } from './lib/tray'
-
-import './App.css'
 import { createAppDataDir } from './lib/fs'
 import { getSetting, setSetting } from './lib/settings'
+import { createTray } from './lib/tray'
 
 export default function App({ children }: { children?: JSXElement }) {
   onMount(() => {
@@ -18,5 +18,5 @@ export default function App({ children }: { children?: JSXElement }) {
     })
   })
 
-  return <div>{children}</div>
+  return <main class="flex h-screen w-screen">{children}</main>
 }
