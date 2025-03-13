@@ -40,10 +40,7 @@ export function MailCard(props: MailCardProps) {
             )}
           </div>
 
-          <div className="flex items-center">
-            {props.date && <div className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{props.date}</div>}
-            <div className="ml-2 text-gray-500 transition-transform duration-300 ease-in-out">{props.isContentVisible ? '▼' : '►'}</div>
-          </div>
+          <div className="flex items-center">{props.date && <div className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{props.date}</div>}</div>
         </div>
       </div>
 
