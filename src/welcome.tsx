@@ -1,7 +1,6 @@
-import { useSettings } from '@/settings/provider'
 import { createOpenAI } from '@ai-sdk/openai'
 import { streamObject } from 'ai'
-import { isNotNull } from 'drizzle-orm'
+import { eq, isNotNull } from 'drizzle-orm'
 import { CheckCircle2, ChevronDown, RefreshCw, Square } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { v7 as uuidv7 } from 'uuid'
@@ -10,9 +9,10 @@ import { Button } from './components/ui/button'
 import { Skeleton } from './components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './components/ui/tooltip'
 import { useDrizzle } from './db/provider'
-import { todosTable } from './db/schema'
+import { modelsTable, todosTable } from './db/schema'
 import { useImap } from './imap/provider'
 import { getFromFromParsedEmail, getMessageIdFromParsedEmail } from './lib/utils'
+import { useSettings } from './settings/provider'
 
 export default function WelcomePage() {
   const settingsContext = useSettings()
@@ -51,10 +51,9 @@ export default function WelcomePage() {
         // Fetch emails from inbox
         const inboxEmails = await imapClient.fetchInbox('INBOX', undefined, 10)
 
-        // Get API key from settings
-        const apiKey = settingsContext?.settings?.models?.openai_api_key
+        const model = await db.select().from(modelsTable).where(eq(modelsTable.is_system, 1)).get()
 
-        if (!apiKey) {
+        if (!model?.api_key) {
           setInboxSummary('Please set your OpenAI API key in settings to generate inbox summaries.')
           setLoading(false)
           setIsRefreshing(false)
@@ -62,7 +61,7 @@ export default function WelcomePage() {
         }
 
         const openai = createOpenAI({
-          apiKey,
+          apiKey: model.api_key,
         })
 
         // Create a prompt for summarizing the inbox

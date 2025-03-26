@@ -1,14 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Route, Routes } from 'react-router'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 
 import ChatDetailPage from '@/chats/detail'
 import ChatLayout from '@/chats/layout'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import AccountsSettingsPage from '@/settings/accounts'
 import Settings from '@/settings/index'
-import ModelsSettingsPage from '@/settings/models'
+import ModelDetailPage from '@/settings/models/detail'
+import ModelsLayout from '@/settings/models/layout'
+import NewModelPage from '@/settings/models/new'
 import { useEffect, useState } from 'react'
-import { getSettings } from './dal'
+import { getSettings, seedModels } from './dal'
 import { initializeDrizzleDatabase } from './db/database'
 import { migrate } from './db/migrate'
 import { DrizzleProvider } from './db/provider'
@@ -37,6 +39,8 @@ const init = async (): Promise<InitData> => {
   console.log('Recreating embeddings index')
 
   const settings = (await getSettings<SettingsType>(db, 'main')) || {}
+
+  await seedModels(db)
 
   const imap = new ImapClient()
   const imapSync = new ImapSyncClient()
@@ -101,7 +105,11 @@ export const App = () => {
                         <Route path="settings" element={<SettingsLayout />}>
                           <Route index element={<Settings />} />
                           <Route path="accounts" element={<AccountsSettingsPage />} />
-                          <Route path="models" element={<ModelsSettingsPage />} />
+                          <Route path="models" element={<ModelsLayout />}>
+                            <Route index element={<Navigate to="/settings/models/new" replace />} />
+                            <Route path="new" element={<NewModelPage />} />
+                            <Route path=":modelId" element={<ModelDetailPage />} />
+                          </Route>
                         </Route>
 
                         <Route path="ui-kit" element={<UiKitPage />} />

@@ -53,6 +53,16 @@ CREATE TABLE `embeddings` (
 CREATE UNIQUE INDEX `embeddings_id_unique` ON `embeddings` (`id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `embeddings_email_message_id_unique` ON `embeddings` (`email_message_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `embeddings_email_thread_id_unique` ON `embeddings` (`email_thread_id`);--> statement-breakpoint
+CREATE TABLE `models` (
+	`id` text PRIMARY KEY NOT NULL,
+	`provider` text NOT NULL,
+	`model` text NOT NULL,
+	`url` text,
+	`api_key` text,
+	`is_system` integer DEFAULT 0
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `models_id_unique` ON `models` (`id`);--> statement-breakpoint
 CREATE TABLE `settings` (
 	`key` text PRIMARY KEY NOT NULL,
 	`value` text,
@@ -62,8 +72,7 @@ CREATE TABLE `settings` (
 CREATE TABLE `todos` (
 	`id` text PRIMARY KEY NOT NULL,
 	`item` text NOT NULL,
-	`imap_id` text,
-	FOREIGN KEY (`imap_id`) REFERENCES `email_messages`(`message_id`) ON UPDATE cascade ON DELETE set null
+	`imap_id` text
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `todos_id_unique` ON `todos` (`id`);

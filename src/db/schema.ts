@@ -1,7 +1,7 @@
 import { ParsedEmail } from '@/types'
 import { Attachment, Message } from 'ai'
 import { sql } from 'drizzle-orm'
-import { customType, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { customType, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const float32Array = customType<{
   data: number[]
@@ -82,6 +82,15 @@ export const todosTable = sqliteTable('todos', {
   id: text('id').primaryKey().notNull().unique(),
   item: text('item').notNull(),
   imap_id: text('imap_id'), // We don't use a foreign key here because the email message might not exist in the database yet
+})
+
+export const modelsTable = sqliteTable('models', {
+  id: text('id').primaryKey().notNull().unique(),
+  provider: text('provider', { enum: ['openai', 'fireworks', 'openai_compatible'] }).notNull(),
+  model: text('model').notNull(),
+  url: text('url'),
+  api_key: text('api_key'),
+  is_system: integer('is_system').default(0),
 })
 
 export const embeddingsTable = sqliteTable('embeddings', {

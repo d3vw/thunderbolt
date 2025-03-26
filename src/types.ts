@@ -4,7 +4,7 @@ import { Window } from '@tauri-apps/api/window'
 import { InferSelectModel } from 'drizzle-orm'
 import { SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy'
 import * as schema from './db/schema'
-import { chatMessagesTable, chatThreadsTable, emailMessagesTable, emailThreadsTable, embeddingsTable, settingsTable } from './db/schema'
+import { chatMessagesTable, chatThreadsTable, emailMessagesTable, emailThreadsTable, embeddingsTable, modelsTable, settingsTable } from './db/schema'
 import ImapClient from './imap/imap'
 import Database from './lib/libsql'
 import { ImapSyncClient } from './sync'
@@ -53,7 +53,7 @@ export type Setting = InferSelectModel<typeof settingsTable>
 export type EmailMessage = InferSelectModel<typeof emailMessagesTable>
 export type EmailThread = InferSelectModel<typeof emailThreadsTable>
 export type Embedding = InferSelectModel<typeof embeddingsTable>
-
+export type Model = InferSelectModel<typeof modelsTable>
 export type ParsedEmail = {
   attachments: unknown[]
   clean_text: string

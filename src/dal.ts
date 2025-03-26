@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
-import { settingsTable } from './db/schema'
+import { v7 as uuidv7 } from 'uuid'
+import { modelsTable, settingsTable } from './db/schema'
 import ImapClient from './imap/imap'
 import { DrizzleContextType } from './types'
 
@@ -38,4 +39,18 @@ export const getInboxSummary = async (db: DrizzleContextType['db'], imapClient: 
   }
 
   return summary
+}
+
+export const seedModels = async (db: DrizzleContextType['db']) => {
+  const models = await db.select().from(modelsTable)
+  if (models.length === 0) {
+    const seedData = [
+      { id: uuidv7(), provider: 'openai' as const, model: 'gpt-4o', is_system: 1 },
+      { id: uuidv7(), provider: 'openai' as const, model: 'o3-mini', is_system: 1 },
+      { id: uuidv7(), provider: 'openai_compatible' as const, model: 'llama3.2:3b-instruct-q4_1', url: 'http://localhost:11434/v1', is_system: 0 },
+    ]
+    for (const model of seedData) {
+      await db.insert(modelsTable).values(model)
+    }
+  }
 }
