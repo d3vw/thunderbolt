@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
-import { modelsTable, settingsTable } from './db/schema'
+import { emailMessagesTable, emailThreadsTable, modelsTable, settingsTable } from './db/schema'
 import ImapClient from './imap/imap'
-import { DrizzleContextType } from './types'
+import { DrizzleContextType, EmailThreadWithMessages } from './types'
 
 export const setSettings = async (db: DrizzleContextType['db'], key: string, value: any) => {
   await db
@@ -53,4 +53,41 @@ export const seedModels = async (db: DrizzleContextType['db']) => {
       await db.insert(modelsTable).values(model)
     }
   }
+}
+
+export const getEmailThreadByIdWithMessages = async (db: DrizzleContextType['db'], emailThreadId: string): Promise<EmailThreadWithMessages | null> => {
+  const thread = await db.select().from(emailThreadsTable).where(eq(emailThreadsTable.id, emailThreadId)).get()
+
+  if (!thread) return null
+
+  const messages = await db.select().from(emailMessagesTable).where(eq(emailMessagesTable.messageId, emailThreadId))
+  return { ...thread, messages }
+}
+
+export const getEmailThreadByMessageImapIdWithMessages = async (db: DrizzleContextType['db'], imapId: string): Promise<EmailThreadWithMessages | null> => {
+  const message = await db.select().from(emailMessagesTable).where(eq(emailMessagesTable.messageId, imapId)).get()
+
+  if (!message || !message.email_thread_id) return null
+
+  const thread = await db.select().from(emailThreadsTable).where(eq(emailThreadsTable.id, message.email_thread_id)).get()
+
+  if (!thread) return null
+
+  const messages = await db.select().from(emailMessagesTable).where(eq(emailMessagesTable.email_thread_id, thread.id))
+
+  return { ...thread, messages }
+}
+
+export const getEmailThreadByMessageIdWithMessages = async (db: DrizzleContextType['db'], emailMessageId: string): Promise<EmailThreadWithMessages | null> => {
+  const message = await db.select().from(emailMessagesTable).where(eq(emailMessagesTable.id, emailMessageId)).get()
+
+  if (!message || !message.email_thread_id) return null
+
+  const thread = await db.select().from(emailThreadsTable).where(eq(emailThreadsTable.id, message.email_thread_id)).get()
+
+  if (!thread) return null
+
+  const messages = await db.select().from(emailMessagesTable).where(eq(emailMessagesTable.email_thread_id, thread.id))
+
+  return { ...thread, messages }
 }

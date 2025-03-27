@@ -56,6 +56,11 @@ export type EmailMessage = InferSelectModel<typeof emailMessagesTable>
 export type EmailThread = InferSelectModel<typeof emailThreadsTable>
 export type Embedding = InferSelectModel<typeof embeddingsTable>
 export type Model = InferSelectModel<typeof modelsTable>
+
+export type EmailThreadWithMessages = EmailThread & {
+  messages: EmailMessage[]
+}
+
 export type ParsedEmail = {
   attachments: unknown[]
   clean_text: string

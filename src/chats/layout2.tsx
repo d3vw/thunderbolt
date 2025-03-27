@@ -1,11 +1,12 @@
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
-import { SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenuButton, SidebarProvider } from '@/components/ui/sidebar'
+import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenuButton, SidebarProvider } from '@/components/ui/sidebar'
 import { useSideview } from '@/sideview/provider'
 import { Sidebar } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 import { Outlet } from 'react-router'
 import ChatSidebar from './sidebar'
+import { Sideview } from './sideview'
 
 export default function Page() {
   const ref = useRef<ImperativePanelHandle>(null)
@@ -37,6 +38,9 @@ export default function Page() {
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarHeader>
+          <SidebarContent>
+            <Sideview />
+          </SidebarContent>
         </ResizablePanel>
       </ResizablePanelGroup>
     </SidebarProvider>
