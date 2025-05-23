@@ -90,7 +90,7 @@ export default function Page() {
                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild>
-                      <Link to="/settings/accounts">
+                      <Link to="/settings/preferences">
                         <span>Settings</span>
                       </Link>
                     </SidebarMenuButton>

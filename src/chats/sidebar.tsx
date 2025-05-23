@@ -6,7 +6,6 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -14,11 +13,12 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from '@/components/ui/sidebar'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useDrizzle } from '@/db/provider'
 import { chatThreadsTable } from '@/db/tables'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { desc, eq } from 'drizzle-orm'
-import { Loader2, MoreHorizontal, SquarePen } from 'lucide-react'
+import { Flame, Loader2, MoreHorizontal, SquarePen } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { v7 as uuidv7 } from 'uuid'
 
@@ -58,23 +58,31 @@ export default function ChatSidebar() {
     },
   })
 
+  const deleteAllChatsMutation = useMutation({
+    mutationFn: async () => {
+      await db.delete(chatThreadsTable)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chatThreads'] })
+    },
+  })
+
   const createNewChat = () => {
     createChatMutation.mutate()
   }
 
   return (
     <Sidebar>
-      <SidebarHeader>
+      <SidebarContent className="flex flex-col h-full">
         <SidebarGroup>
-          <SidebarGroupContent className="flex justify-between w-full flex-1 items-center">
+          <SidebarGroupContent className="flex justify-between w-full flex-1">
             <SidebarTrigger className="cursor-pointer" />
             <SidebarMenuButton onClick={createNewChat} className="w-fit pr-0 pl-0 aspect-square items-center justify-center cursor-pointer" tooltip="New Chat">
               <SquarePen className="size-5" />
             </SidebarMenuButton>
           </SidebarGroupContent>
         </SidebarGroup>
-      </SidebarHeader>
-      <SidebarContent className="flex flex-col h-full">
+
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -87,7 +95,7 @@ export default function ChatSidebar() {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <Link to="/settings/accounts">
+                  <Link to="/settings/preferences">
                     <span>Settings</span>
                   </Link>
                 </SidebarMenuButton>
@@ -99,7 +107,25 @@ export default function ChatSidebar() {
         <SidebarSeparator className="m-0" />
 
         <SidebarGroup className="flex-1 overflow-y-auto">
-          <SidebarGroupLabel>Threads</SidebarGroupLabel>
+          <div className="flex items-center justify-between">
+            <SidebarGroupLabel>Recent Chats</SidebarGroupLabel>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <SidebarMenuButton
+                    onClick={() => deleteAllChatsMutation.mutate()}
+                    className="w-fit pr-0 pl-0 aspect-square items-center justify-center cursor-pointer"
+                    disabled={deleteAllChatsMutation.isPending}
+                  >
+                    {deleteAllChatsMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Flame className="size-4" />}
+                  </SidebarMenuButton>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Clear all chats</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <SidebarMenu>
             {chatThreads.map((thread) => (
               <DropdownMenu key={thread.id}>

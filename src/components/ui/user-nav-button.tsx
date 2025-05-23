@@ -35,7 +35,7 @@ export function UserNavButton({ username = 'John Doe', userEmail = 'john.doe@exa
             <div className="py-1 px-2">
               <div className="mt-1 md:mt-0">
                 <Button asChild variant="ghost" className="w-full justify-start">
-                  <Link to="/settings/accounts">
+                  <Link to="/settings/preferences">
                     <Settings className="size-4 mr-2" />
                     Settings
                   </Link>

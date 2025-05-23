@@ -20,9 +20,9 @@ import DevToolsPage from './devtools'
 import ImapClient from './imap/imap'
 import { ImapProvider } from './imap/provider'
 import Layout from './layout'
+import { initializeAxios } from './lib/axios'
 import { createAppDataDir } from './lib/fs'
 import { TrayManager, TrayProvider } from './lib/tray'
-import { initializeAxios } from './lib/axios'
 import Loading from './loading'
 import SettingsLayout from './settings/layout'
 import { SideviewProvider } from './sideview/provider'
@@ -128,12 +128,12 @@ export const App = () => {
                         <Route path="settings" element={<SettingsLayout />}>
                           <Route index element={<Settings />} />
                           <Route path="preferences" element={<PreferencesSettingsPage />} />
-                          <Route path="accounts" element={<AccountsSettingsPage />} />
                           <Route path="models" element={<ModelsLayout />}>
                             <Route index element={<Navigate to="/settings/models/new" replace />} />
                             <Route path="new" element={<NewModelPage />} />
                             <Route path=":modelId" element={<ModelDetailPage />} />
                           </Route>
+                          <Route path="accounts" element={<AccountsSettingsPage />} />
                         </Route>
 
                         <Route path="ui-kit" element={<UiKitPage />} />

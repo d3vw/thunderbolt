@@ -51,17 +51,17 @@ export default function SettingsLayout() {
                   </SidebarMenuItem>
 
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={currentPath.includes('/settings/accounts')}>
-                      <Link to="/settings/accounts">
-                        <span>Accounts</span>
+                    <SidebarMenuButton asChild isActive={currentPath.includes('/settings/models')}>
+                      <Link to="/settings/models">
+                        <span>Models</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
 
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={currentPath.includes('/settings/models')}>
-                      <Link to="/settings/models">
-                        <span>Models</span>
+                    <SidebarMenuButton asChild isActive={currentPath.includes('/settings/accounts')}>
+                      <Link to="/settings/accounts">
+                        <span>Accounts</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
