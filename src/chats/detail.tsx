@@ -1,5 +1,5 @@
 import { useDrizzle } from '@/db/provider'
-import { chatMessagesTable, chatThreadsTable, modelsTable } from '@/db/tables'
+import { chatMessagesTable, chatThreadsTable } from '@/db/tables'
 import { createModel } from '@/lib/ai'
 import { convertDbChatMessageToUIMessage, convertUIMessageToDbChatMessage } from '@/lib/utils'
 import { SaveMessagesFunction } from '@/types'
@@ -51,13 +51,6 @@ export default function ChatDetailPage() {
       }
 
       try {
-        // @todo: use different model
-        const llama3Model = await db.select().from(modelsTable).where(eq(modelsTable.model, 'meta-llama/Meta-Llama-3.1-70B-Instruct')).get()
-
-        if (!llama3Model) {
-          throw new Error('No llama3 model found')
-        }
-
         // Generate a title based on the first message
         const firstMessage = messages.find((msg) => msg.role === 'user')
         if (!firstMessage) {
@@ -72,7 +65,15 @@ export default function ChatDetailPage() {
             .join(' ') || ''
 
         if (messageContent) {
-          const model = createModel(llama3Model)
+          const model = await createModel({
+            id: 'system',
+            name: 'System',
+            provider: 'openai_compatible',
+            url: '{{cloud_url}}/openai',
+            model: 'meta-llama/Meta-Llama-3.1-70B-Instruct',
+            apiKey: null,
+            isSystem: 1,
+          })
 
           const { text } = await generateText({
             model,

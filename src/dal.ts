@@ -24,14 +24,14 @@ export const seedModels = async (db: DrizzleContextType['db']) => {
       {
         id: uuidv7(),
         name: 'Llama 3.1 (70B)',
-        provider: 'deepinfra' as const,
+        provider: 'thunderbolt' as const,
         model: 'meta-llama/Meta-Llama-3.1-70B-Instruct',
         isSystem: 1,
       },
       {
         id: uuidv7(),
         name: 'Qwen3 (235B)',
-        provider: 'deepinfra' as const,
+        provider: 'thunderbolt' as const,
         model: 'Qwen/Qwen3-235B-A22B',
         isSystem: 1,
       },
@@ -56,7 +56,7 @@ export const seedSettings = async (db: DrizzleContextType['db']) => {
   if (!cloudUrlSetting) {
     await db.insert(settingsTable).values({
       key: 'cloud_url',
-      value: 'http://localhost:8000',
+      value: 'https://thunderbolt-hooc.onrender.com',
     })
   }
 

@@ -1,12 +1,12 @@
+import * as schema from '@/db/schema'
 import { emailMessagesTable, modelsTable, todosTable } from '@/db/schema'
 import { ImapSyncer } from '@/imap/sync'
+import { generateObject } from 'ai'
 import { eq, isNotNull } from 'drizzle-orm'
 import { SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy'
-import { createModel } from './ai'
-import { generateObject } from 'ai'
-import { z } from 'zod'
 import { v7 as uuidv7 } from 'uuid'
-import * as schema from '@/db/schema'
+import { z } from 'zod'
+import { createModel } from './ai'
 
 export type RefreshTasksParams = {
   db: SqliteRemoteDatabase<typeof schema>
@@ -30,7 +30,7 @@ export const refreshTasks = async ({ db }: RefreshTasksParams) => {
     throw new Error('No model found')
   }
 
-  const model = createModel(modelConfig)
+  const model = await createModel(modelConfig)
 
   const emailsContext = messages
     .map(

@@ -37,6 +37,10 @@ const locationFormSchema = z.object({
   locationLng: z.string().min(1, { message: 'Longitude is required.' }),
 })
 
+const cloudFormSchema = z.object({
+  cloudUrl: z.string().url({ message: 'Please enter a valid URL.' }).or(z.string().length(0)),
+})
+
 export default function PreferencesSettingsPage() {
   const { db } = useDrizzle()
   const queryClient = useQueryClient()
@@ -46,6 +50,7 @@ export default function PreferencesSettingsPage() {
   const [isSearching, setIsSearching] = React.useState(false)
   const [showNameSaved, setShowNameSaved] = React.useState(false)
   const [showLocationSaved, setShowLocationSaved] = React.useState(false)
+  const [showCloudSaved, setShowCloudSaved] = React.useState(false)
 
   // Get any existing settings from the database
   const { data: settings } = useQuery({
@@ -55,12 +60,14 @@ export default function PreferencesSettingsPage() {
       const latData = await db.select().from(settingsTable).where(eq(settingsTable.key, 'location_lat'))
       const lngData = await db.select().from(settingsTable).where(eq(settingsTable.key, 'location_lng'))
       const preferredNameData = await db.select().from(settingsTable).where(eq(settingsTable.key, 'preferred_name'))
+      const cloudUrlData = await db.select().from(settingsTable).where(eq(settingsTable.key, 'cloud_url'))
 
       return {
         locationName: nameData[0]?.value || '',
         locationLat: latData[0]?.value || '',
         locationLng: lngData[0]?.value || '',
         preferredName: preferredNameData[0]?.value || '',
+        cloudUrl: cloudUrlData[0]?.value || '',
       }
     },
   })
@@ -81,6 +88,13 @@ export default function PreferencesSettingsPage() {
     },
   })
 
+  const cloudForm = useForm<z.infer<typeof cloudFormSchema>>({
+    resolver: zodResolver(cloudFormSchema),
+    defaultValues: {
+      cloudUrl: '',
+    },
+  })
+
   // Update forms when data is loaded
   React.useEffect(() => {
     if (settings) {
@@ -93,8 +107,12 @@ export default function PreferencesSettingsPage() {
         locationLat: settings.locationLat as string,
         locationLng: settings.locationLng as string,
       })
+
+      cloudForm.reset({
+        cloudUrl: settings.cloudUrl as string,
+      })
     }
-  }, [settings, nameForm, locationForm])
+  }, [settings, nameForm, locationForm, cloudForm])
 
   // Debounced search for locations
   React.useEffect(() => {
@@ -149,6 +167,20 @@ export default function PreferencesSettingsPage() {
     },
   })
 
+  // Save cloud provider mutation
+  const saveCloudMutation = useMutation({
+    mutationFn: async (values: z.infer<typeof cloudFormSchema>) => {
+      // Delete and insert for cloud url setting
+      await db.delete(settingsTable).where(eq(settingsTable.key, 'cloud_url'))
+      await db.insert(settingsTable).values([{ key: 'cloud_url', value: values.cloudUrl }])
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+      setShowCloudSaved(true)
+      setTimeout(() => setShowCloudSaved(false), 2000)
+    },
+  })
+
   const onSubmitName = async (values: z.infer<typeof nameFormSchema>) => {
     setShowNameSaved(false)
     await saveNameMutation.mutateAsync(values)
@@ -157,6 +189,11 @@ export default function PreferencesSettingsPage() {
   const onSubmitLocation = async (values: z.infer<typeof locationFormSchema>) => {
     setShowLocationSaved(false)
     await saveLocationMutation.mutateAsync(values)
+  }
+
+  const onSubmitCloud = async (values: z.infer<typeof cloudFormSchema>) => {
+    setShowCloudSaved(false)
+    await saveCloudMutation.mutateAsync(values)
   }
 
   const handleSelectLocation = (location: LocationData) => {
@@ -252,6 +289,37 @@ export default function PreferencesSettingsPage() {
                   {saveLocationMutation.isPending ? 'Saving...' : 'Save'}
                 </Button>
                 {showLocationSaved && <span className="ml-3 text-sm text-green-500 flex items-center">Settings saved!</span>}
+              </div>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+
+      <h3 className="text-lg font-semibold">Cloud Provider</h3>
+      <Card>
+        <CardContent className="pt-6">
+          <Form {...cloudForm}>
+            <form onSubmit={cloudForm.handleSubmit(onSubmitCloud)} className="flex flex-col gap-4">
+              <FormField
+                control={cloudForm.control}
+                name="cloudUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Cloud URL</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://your-cloud-provider.com" {...field} />
+                    </FormControl>
+                    <FormDescription>Enter your cloud provider URL for syncing.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end">
+                <Button type="submit" disabled={saveCloudMutation.isPending}>
+                  {saveCloudMutation.isPending ? 'Saving...' : 'Save'}
+                </Button>
+                {showCloudSaved && <span className="ml-3 text-sm text-green-500 flex items-center">Settings saved!</span>}
               </div>
             </form>
           </Form>

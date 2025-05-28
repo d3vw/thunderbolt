@@ -50,8 +50,22 @@ type AiFetchStreamingResponseOptions = {
   model: Model
 }
 
-export const createModel = (modelConfig: Model): LanguageModel => {
+export const createModel = async (modelConfig: Model): Promise<LanguageModel> => {
   switch (modelConfig.provider) {
+    case 'thunderbolt': {
+      const { db } = await getDrizzleDatabase()
+      const cloudUrlSetting = await db.select().from(settingsTable).where(eq(settingsTable.key, 'cloud_url')).get()
+      const cloudUrl = (cloudUrlSetting?.value as string) || 'http://localhost:8000'
+
+      const baseURL = modelConfig.url?.includes('{{cloud_url}}') ? modelConfig.url.replace('{{cloud_url}}', cloudUrl) : modelConfig.url || 'http://localhost:8000/openai'
+
+      const openaiCompatible = createOpenAICompatible({
+        name: 'custom',
+        baseURL,
+        apiKey: modelConfig.apiKey ?? undefined,
+      })
+      return openaiCompatible(modelConfig.model) as LanguageModel
+    }
     case 'openai': {
       if (!modelConfig.apiKey) {
         throw new Error('No API key provided')
@@ -92,9 +106,16 @@ export const createModel = (modelConfig: Model): LanguageModel => {
       if (!modelConfig.url) {
         throw new Error('No URL provided')
       }
+
+      const { db } = await getDrizzleDatabase()
+      const cloudUrlSetting = await db.select().from(settingsTable).where(eq(settingsTable.key, 'cloud_url')).get()
+      const cloudUrl = (cloudUrlSetting?.value as string) || 'http://localhost:8000'
+
+      const baseURL = modelConfig.url?.includes('{{cloud_url}}') ? modelConfig.url.replace('{{cloud_url}}', cloudUrl) : modelConfig.url
+
       const openaiCompatible = createOpenAICompatible({
         name: 'custom',
-        baseURL: modelConfig.url,
+        baseURL,
         apiKey: modelConfig.apiKey ?? undefined,
       })
       return openaiCompatible(modelConfig.model) as LanguageModel
@@ -107,7 +128,7 @@ export const createModel = (modelConfig: Model): LanguageModel => {
 
 export const aiFetchStreamingResponse = async ({ init, saveMessages, model: modelConfig }: AiFetchStreamingResponseOptions) => {
   try {
-    const baseModel = createModel(modelConfig)
+    const baseModel = await createModel(modelConfig)
 
     const wrappedModel = wrapLanguageModel({
       model: baseModel,

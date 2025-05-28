@@ -18,7 +18,7 @@ import { Trash2 } from 'lucide-react'
 
 const formSchema = z
   .object({
-    provider: z.enum(['openai', 'fireworks', 'openai_compatible', 'deepinfra']),
+    provider: z.enum(['thunderbolt', 'openai', 'fireworks', 'openai_compatible', 'deepinfra']),
     name: z.string().min(1, { message: 'Name is required.' }),
     model: z.string().min(1, { message: 'Model name is required.' }),
     url: z.string().optional(),
@@ -88,7 +88,7 @@ export default function ModelDetailPage() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      provider: model?.provider || 'openai',
+      provider: model?.provider || 'thunderbolt',
       name: model?.name || '',
       model: model?.model || '',
       url: model?.url || '',
@@ -100,7 +100,7 @@ export default function ModelDetailPage() {
   React.useEffect(() => {
     if (model) {
       form.reset({
-        provider: model.provider || 'openai',
+        provider: model.provider || 'thunderbolt',
         name: model.name || '',
         model: model.model || '',
         url: model.url || '',

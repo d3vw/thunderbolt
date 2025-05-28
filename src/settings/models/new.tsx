@@ -16,7 +16,7 @@ import { Model } from '@/types'
 
 const formSchema = z
   .object({
-    provider: z.enum(['openai', 'deepinfra', 'fireworks', 'openai_compatible']),
+    provider: z.enum(['thunderbolt', 'openai', 'deepinfra', 'fireworks', 'openai_compatible']),
     name: z.string().min(1, { message: 'Name is required.' }),
     model: z.string().min(1, { message: 'Model name is required.' }),
     url: z.string().optional(),
@@ -70,7 +70,7 @@ export default function NewModelPage() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      provider: 'openai',
+      provider: 'thunderbolt',
       name: '',
       model: '',
       url: '',
@@ -104,6 +104,7 @@ export default function NewModelPage() {
                         <SelectValue placeholder="Select provider" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="thunderbolt">Thunderbolt</SelectItem>
                         <SelectItem value="openai">OpenAI</SelectItem>
                         <SelectItem value="deepinfra">DeepInfra</SelectItem>
                         <SelectItem value="fireworks">Fireworks</SelectItem>

@@ -62,6 +62,7 @@ export default function ModelsLayout() {
           {models.map((model) => (
             <SelectItem key={model.id} value={model.id}>
               <p className="text-left">
+                {model.provider === 'thunderbolt' && 'Thunderbolt'}
                 {model.provider === 'openai' && 'OpenAI'}
                 {model.provider === 'deepinfra' && 'DeepInfra'}
                 {model.provider === 'fireworks' && 'Fireworks'}
