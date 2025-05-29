@@ -40,7 +40,7 @@ const getSelectedModel = async (db: SqliteRemoteDatabase) => {
 export default function ChatState({ id, models, initialMessages, saveMessages }: ChatStateProps) {
   const queryClient = useQueryClient()
   const { db } = useDrizzle()
-  const { client: mcpClient } = useMCP()
+  const { getEnabledClients } = useMCP()
 
   const { data: selectedModel } = useQuery<Model>({
     queryKey: ['settings', 'selected_model'],
@@ -87,7 +87,7 @@ export default function ChatState({ id, models, initialMessages, saveMessages }:
           init,
           saveMessages,
           model,
-          mcpClient,
+          mcpClients: getEnabledClients(),
         })
       } catch (error) {
         console.error('Error in fetch:', error)

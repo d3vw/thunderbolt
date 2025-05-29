@@ -1,22 +1,23 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { eq } from 'drizzle-orm'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 
 import ChatDetailPage from '@/chats/detail'
 import ChatLayout from '@/chats/layout2'
 import { SidebarProvider } from '@/components/ui/sidebar'
+import { useMcpSync } from '@/hooks/use-mcp-sync'
 import AccountsSettingsPage from '@/settings/accounts'
 import { default as Settings } from '@/settings/index'
+import McpServersPage from '@/settings/mcp-servers'
 import ModelDetailPage from '@/settings/models/detail'
 import ModelsLayout from '@/settings/models/layout'
 import NewModelPage from '@/settings/models/new'
 import PreferencesSettingsPage from '@/settings/preferences'
 import { useEffect, useState } from 'react'
-import { seedAccounts, seedModels, seedSettings } from './dal'
+import { seedAccounts, seedMcpServers, seedModels, seedSettings } from './dal'
 import { initializeDrizzleDatabase } from './db/database'
 import { migrate } from './db/migrate'
 import { DrizzleProvider } from './db/provider'
-import { accountsTable, settingsTable } from './db/tables'
+import { accountsTable } from './db/tables'
 import DevToolsPage from './devtools'
 import ImapClient from './imap/imap'
 import { ImapProvider } from './imap/provider'
@@ -35,6 +36,43 @@ import WelcomePage from './welcome'
 
 const queryClient = new QueryClient()
 
+// Component that initializes MCP sync
+function AppContent({ initData }: { initData: InitData }) {
+  // Initialize MCP sync
+  useMcpSync()
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          {/* Home routes with HomeLayout */}
+          <Route element={<ChatLayout />}>
+            {/* <Route index element={<ChatNewPage />} /> */}
+            <Route index element={<WelcomePage />} />
+            <Route path="chats/:chatThreadId" element={<ChatDetailPage />} />
+          </Route>
+
+          {/* Settings routes with SettingsLayout */}
+          <Route path="settings" element={<SettingsLayout />}>
+            <Route index element={<Settings />} />
+            <Route path="preferences" element={<PreferencesSettingsPage />} />
+            <Route path="models" element={<ModelsLayout />}>
+              <Route index element={<Navigate to="/settings/models/new" replace />} />
+              <Route path="new" element={<NewModelPage />} />
+              <Route path=":modelId" element={<ModelDetailPage />} />
+            </Route>
+            <Route path="mcp-servers" element={<McpServersPage />} />
+            <Route path="accounts" element={<AccountsSettingsPage />} />
+          </Route>
+
+          <Route path="ui-kit" element={<UiKitPage />} />
+          <Route path="devtools" element={<DevToolsPage />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  )
+}
+
 const init = async (): Promise<InitData> => {
   const appDataDirPath = await createAppDataDir()
 
@@ -45,6 +83,7 @@ const init = async (): Promise<InitData> => {
   await seedAccounts(db)
   await seedModels(db)
   await seedSettings(db)
+  await seedMcpServers(db)
 
   await initializeAxios(db)
 
@@ -86,10 +125,6 @@ const init = async (): Promise<InitData> => {
     }
   }
 
-  // Get MCP URL from settings
-  const mcpUrlSetting = await db.select().from(settingsTable).where(eq(settingsTable.key, 'mcp_url')).get()
-  const mcpUrl = (mcpUrlSetting?.value as string) || 'http://localhost:8000/mcp/'
-
   return {
     db,
     sqlite,
@@ -97,7 +132,6 @@ const init = async (): Promise<InitData> => {
     imapSync,
     sideviewType,
     sideviewId,
-    mcpUrl,
     ...tray,
   }
 }
@@ -117,38 +151,12 @@ export const App = () => {
     <TrayProvider tray={initData.tray} window={initData.window}>
       <QueryClientProvider client={queryClient}>
         <DrizzleProvider context={{ db: initData.db, sqlite: initData.sqlite }}>
-          <MCPProvider mcpUrl={initData.mcpUrl}>
+          <MCPProvider>
             <ImapProvider client={initData.imap}>
               <ImapSyncProvider client={initData.imapSync}>
                 <SidebarProvider>
                   <SideviewProvider sideviewType={initData.sideviewType} sideviewId={initData.sideviewId}>
-                    <BrowserRouter>
-                      <Routes>
-                        <Route path="/" element={<Layout />}>
-                          {/* Home routes with HomeLayout */}
-                          <Route element={<ChatLayout />}>
-                            {/* <Route index element={<ChatNewPage />} /> */}
-                            <Route index element={<WelcomePage />} />
-                            <Route path="chats/:chatThreadId" element={<ChatDetailPage />} />
-                          </Route>
-
-                          {/* Settings routes with SettingsLayout */}
-                          <Route path="settings" element={<SettingsLayout />}>
-                            <Route index element={<Settings />} />
-                            <Route path="preferences" element={<PreferencesSettingsPage />} />
-                            <Route path="models" element={<ModelsLayout />}>
-                              <Route index element={<Navigate to="/settings/models/new" replace />} />
-                              <Route path="new" element={<NewModelPage />} />
-                              <Route path=":modelId" element={<ModelDetailPage />} />
-                            </Route>
-                            <Route path="accounts" element={<AccountsSettingsPage />} />
-                          </Route>
-
-                          <Route path="ui-kit" element={<UiKitPage />} />
-                          <Route path="devtools" element={<DevToolsPage />} />
-                        </Route>
-                      </Routes>
-                    </BrowserRouter>
+                    <AppContent initData={initData} />
                   </SideviewProvider>
                 </SidebarProvider>
               </ImapSyncProvider>

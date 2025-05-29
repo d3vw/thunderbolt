@@ -4,79 +4,157 @@ import { createContext, ReactNode, useContext, useEffect, useRef, useState } fro
 
 type MCPClient = Awaited<ReturnType<typeof experimental_createMCPClient>>
 
-interface MCPContextType {
+interface MCPServerConnection {
+  id: string
+  name: string
+  url: string
   client: MCPClient | null
   isConnected: boolean
   error: Error | null
-  reconnect: () => Promise<void>
+  enabled: boolean
+}
+
+interface MCPContextType {
+  servers: MCPServerConnection[]
+  getEnabledClients: () => MCPClient[]
+  reconnectServer: (serverId: string) => Promise<void>
+  addServer: (server: { id: string; name: string; url: string; enabled: boolean }) => Promise<void>
+  removeServer: (serverId: string) => void
+  updateServerStatus: (serverId: string, enabled: boolean) => void
 }
 
 const MCPContext = createContext<MCPContextType | undefined>(undefined)
 
-export function MCPProvider({ children, mcpUrl }: { children: ReactNode; mcpUrl: string }) {
-  const [client, setClient] = useState<MCPClient | null>(null)
-  const [isConnected, setIsConnected] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
-  const clientRef = useRef<MCPClient | null>(null)
+export function MCPProvider({ children }: { children: ReactNode }) {
+  const [servers, setServers] = useState<MCPServerConnection[]>([])
+  const clientRefs = useRef<Map<string, MCPClient>>(new Map())
 
-  const initializeClient = async () => {
+  const createClient = async (url: string): Promise<MCPClient> => {
+    console.log('Creating MCP client for URL:', url)
+    const mcpClient = await experimental_createMCPClient({
+      transport: new StreamableHTTPClientTransport(new URL(url), {
+        requestInit: {
+          headers: {
+            Accept: 'application/json, text/event-stream',
+          },
+        },
+      }),
+    })
+    return mcpClient
+  }
+
+  const connectServer = async (server: { id: string; name: string; url: string; enabled: boolean }) => {
+    if (!server.enabled) {
+      setServers((prev) => prev.map((s) => (s.id === server.id ? { ...s, client: null, isConnected: false, error: null, enabled: false } : s)))
+      return
+    }
+
     try {
-      console.log('Initializing MCP client with URL:', mcpUrl)
-      const mcpClient = await experimental_createMCPClient({
-        transport: new StreamableHTTPClientTransport(new URL(mcpUrl)),
-      })
+      console.log('Connecting to MCP server:', server.name, server.url)
+      const client = await createClient(server.url)
 
-      clientRef.current = mcpClient
-      setClient(mcpClient)
-      setIsConnected(true)
-      setError(null)
-      console.log('MCP client initialized successfully')
+      clientRefs.current.set(server.id, client)
+
+      setServers((prev) => prev.map((s) => (s.id === server.id ? { ...s, client, isConnected: true, error: null, enabled: true } : s)))
+
+      console.log('MCP server connected successfully:', server.name)
     } catch (err) {
-      console.error('Failed to initialize MCP client:', err)
-      setError(err as Error)
-      setIsConnected(false)
-      setClient(null)
+      console.error('Failed to connect to MCP server:', server.name, err)
+      setServers((prev) => prev.map((s) => (s.id === server.id ? { ...s, client: null, isConnected: false, error: err as Error, enabled: server.enabled } : s)))
     }
   }
 
-  // Initialize connection
-  useEffect(() => {
-    initializeClient()
-
-    // Cleanup on unmount
-    return () => {
-      if (clientRef.current?.close) {
-        console.log('Closing MCP client connection')
-        try {
-          clientRef.current.close()
-        } catch (error) {
-          console.error('Error closing MCP client:', error)
-        }
-      }
-    }
-  }, [mcpUrl])
-
-  const reconnect = async () => {
-    console.log('Reconnecting MCP client...')
-    // Close existing connection if any
-    if (clientRef.current?.close) {
+  const disconnectServer = (serverId: string) => {
+    const client = clientRefs.current.get(serverId)
+    if (client?.close) {
       try {
-        clientRef.current.close()
+        client.close()
       } catch (error) {
-        console.error('Error closing existing MCP client:', error)
+        console.error('Error closing MCP client:', error)
       }
     }
-
-    // Reset state
-    setClient(null)
-    setIsConnected(false)
-    setError(null)
-
-    // Reinitialize
-    await initializeClient()
+    clientRefs.current.delete(serverId)
   }
 
-  return <MCPContext.Provider value={{ client, isConnected, error, reconnect }}>{children}</MCPContext.Provider>
+  const addServer = async (server: { id: string; name: string; url: string; enabled: boolean }) => {
+    // Add server to state first
+    setServers((prev) => [
+      ...prev,
+      {
+        ...server,
+        client: null,
+        isConnected: false,
+        error: null,
+      },
+    ])
+
+    // Then try to connect if enabled
+    if (server.enabled) {
+      await connectServer(server)
+    }
+  }
+
+  const removeServer = (serverId: string) => {
+    disconnectServer(serverId)
+    setServers((prev) => prev.filter((s) => s.id !== serverId))
+  }
+
+  const updateServerStatus = (serverId: string, enabled: boolean) => {
+    const server = servers.find((s) => s.id === serverId)
+    if (!server) return
+
+    if (enabled) {
+      connectServer({ ...server, enabled })
+    } else {
+      disconnectServer(serverId)
+      setServers((prev) => prev.map((s) => (s.id === serverId ? { ...s, client: null, isConnected: false, error: null, enabled: false } : s)))
+    }
+  }
+
+  const reconnectServer = async (serverId: string) => {
+    const server = servers.find((s) => s.id === serverId)
+    if (!server) return
+
+    console.log('Reconnecting MCP server:', server.name)
+    disconnectServer(serverId)
+    await connectServer(server)
+  }
+
+  const getEnabledClients = (): MCPClient[] => {
+    return servers.filter((server) => server.enabled && server.isConnected && server.client).map((server) => server.client!)
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      console.log('Cleaning up MCP connections')
+      clientRefs.current.forEach((client, serverId) => {
+        if (client?.close) {
+          try {
+            client.close()
+          } catch (error) {
+            console.error('Error closing MCP client:', serverId, error)
+          }
+        }
+      })
+      clientRefs.current.clear()
+    }
+  }, [])
+
+  return (
+    <MCPContext.Provider
+      value={{
+        servers,
+        getEnabledClients,
+        reconnectServer,
+        addServer,
+        removeServer,
+        updateServerStatus,
+      }}
+    >
+      {children}
+    </MCPContext.Provider>
+  )
 }
 
 export function useMCP() {

@@ -52,7 +52,7 @@ type AiFetchStreamingResponseOptions = {
   init: RequestInit
   saveMessages: SaveMessagesFunction
   model: Model
-  mcpClient?: MCPClient | null
+  mcpClients?: MCPClient[]
 }
 
 export const createModel = async (modelConfig: Model): Promise<LanguageModel> => {
@@ -128,7 +128,7 @@ export const createModel = async (modelConfig: Model): Promise<LanguageModel> =>
   }
 }
 
-export const aiFetchStreamingResponse = async ({ init, saveMessages, model: modelConfig, mcpClient }: AiFetchStreamingResponseOptions) => {
+export const aiFetchStreamingResponse = async ({ init, saveMessages, model: modelConfig, mcpClients }: AiFetchStreamingResponseOptions) => {
   try {
     const baseModel = await createModel(modelConfig)
 
@@ -167,16 +167,19 @@ export const aiFetchStreamingResponse = async ({ init, saveMessages, model: mode
     }
 
     // Add MCP tools if persistent client is available
-    if (mcpClient) {
+    if (mcpClients && mcpClients.length > 0) {
       try {
-        const mcpTools = await mcpClient.tools()
-        Object.assign(toolset, mcpTools)
-        console.log('MCP tools loaded successfully')
+        // Collect tools from all enabled MCP clients
+        for (const mcpClient of mcpClients) {
+          const mcpTools = await mcpClient.tools()
+          Object.assign(toolset, mcpTools)
+        }
+        console.log(`MCP tools loaded successfully from ${mcpClients.length} clients`)
       } catch (error) {
         console.error('Failed to load MCP tools:', error)
       }
     } else {
-      console.warn('No persistent MCP client available, MCP tools will not be included')
+      console.warn('No MCP clients available, MCP tools will not be included')
     }
 
     const result = streamText({

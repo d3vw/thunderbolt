@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
-import { accountsTable, emailMessagesTable, emailThreadsTable, modelsTable, settingsTable } from './db/tables'
+import { accountsTable, emailMessagesTable, emailThreadsTable, mcpServersTable, modelsTable, settingsTable } from './db/tables'
 import { DrizzleContextType, EmailThreadWithMessagesAndAddresses } from './types'
 
 export const seedAccounts = async (db: DrizzleContextType['db']) => {
@@ -73,6 +73,19 @@ export const seedSettings = async (db: DrizzleContextType['db']) => {
     await db.insert(settingsTable).values({
       key: 'anonymous_id',
       value: uuidv7(), // @todo look into any concerns here
+    })
+  }
+}
+
+export const seedMcpServers = async (db: DrizzleContextType['db']) => {
+  const existingServers = await db.select().from(mcpServersTable).limit(1)
+
+  if (existingServers.length === 0) {
+    await db.insert(mcpServersTable).values({
+      id: uuidv7(),
+      name: 'Local MCP Server',
+      url: 'http://localhost:8000/mcp/',
+      enabled: 1,
     })
   }
 }

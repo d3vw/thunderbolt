@@ -135,3 +135,12 @@ export const accountsTable = sqliteTable('accounts', {
   imapUsername: text('imap_username'),
   imapPassword: text('imap_password'),
 })
+
+export const mcpServersTable = sqliteTable('mcp_servers', {
+  id: text('id').primaryKey().notNull().unique(),
+  name: text('name').notNull(),
+  url: text('url').notNull(),
+  enabled: integer('enabled').default(1).notNull(),
+  createdAt: integer('created_at').default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at').default(sql`(unixepoch())`),
+})

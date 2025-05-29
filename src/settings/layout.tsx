@@ -59,6 +59,14 @@ export default function SettingsLayout() {
                   </SidebarMenuItem>
 
                   <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={currentPath.includes('/settings/mcp-servers')}>
+                      <Link to="/settings/mcp-servers">
+                        <span>MCP Servers</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+
+                  <SidebarMenuItem>
                     <SidebarMenuButton asChild isActive={currentPath.includes('/settings/accounts')}>
                       <Link to="/settings/accounts">
                         <span>Accounts</span>

@@ -23,5 +23,10 @@ export const migrations: Migration[] = [
     "hash": "0002_legal_falcon",
     "name": "0002_legal_falcon.sql",
     "sql": "ALTER TABLE `chat_messages` DROP COLUMN `attachments`;--> statement-breakpoint\nALTER TABLE `chat_messages` DROP COLUMN `annotations`;"
+  },
+  {
+    "hash": "0003_brief_skrulls",
+    "name": "0003_brief_skrulls.sql",
+    "sql": "CREATE TABLE `mcp_servers` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`name` text NOT NULL,\n\t`url` text NOT NULL,\n\t`enabled` integer DEFAULT 1 NOT NULL,\n\t`created_at` integer DEFAULT (unixepoch()),\n\t`updated_at` integer DEFAULT (unixepoch())\n);\n--> statement-breakpoint\nCREATE UNIQUE INDEX `mcp_servers_id_unique` ON `mcp_servers` (`id`);"
   }
 ];

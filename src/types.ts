@@ -14,6 +14,7 @@ import {
   emailMessagesToAddressesTable,
   emailThreadsTable,
   embeddingsTable,
+  mcpServersTable,
   modelsTable,
   settingsTable,
   todosTable,
@@ -31,7 +32,6 @@ export type InitData = {
   window: Window | undefined
   sideviewType: SideviewType | null
   sideviewId: string | null
-  mcpUrl: string
 }
 
 export type ChatMessagePart = UIMessagePart<UIDataTypes>
@@ -72,6 +72,7 @@ export type Embedding = InferSelectModel<typeof embeddingsTable>
 export type Model = InferSelectModel<typeof modelsTable>
 export type Todo = InferSelectModel<typeof todosTable>
 export type Contact = InferSelectModel<typeof contactsTable>
+export type McpServer = InferSelectModel<typeof mcpServersTable>
 
 export type EmailMessageWithAddresses = EmailMessage & {
   sender: EmailAddress
