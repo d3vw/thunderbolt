@@ -131,7 +131,7 @@ export const aiFetchStreamingResponse = async ({ init, saveMessages, model: mode
     const baseModel = await createModel(modelConfig)
 
     const wrappedModel = wrapLanguageModel({
-      model: baseModel,
+      model: baseModel as any, // @todo seems like Vercel AI SDK is not typed correctly
       middleware: extractReasoningMiddleware({ tagName: 'think' }),
     })
 
@@ -156,12 +156,15 @@ export const aiFetchStreamingResponse = async ({ init, saveMessages, model: mode
     const locationLngResult = await db.select().from(settingsTable).where(eq(settingsTable.key, 'location_lng')).get()
     const preferredNameResult = await db.select().from(settingsTable).where(eq(settingsTable.key, 'preferred_name')).get()
 
+    const mcpUrlSetting = await db.select().from(settingsTable).where(eq(settingsTable.key, 'mcp_url')).get()
+    const mcpUrl = (mcpUrlSetting?.value as string) || 'http://localhost:8000/mcp/'
+
     const weatherClient = await getOrCreateWeatherClient()
 
+    // @todo we may want to keep mcp server connections globally since they are persistent - need to research this
+
     const mcpClient = await experimental_createMCPClient({
-      transport: new StreamableHTTPClientTransport(new URL('http://localhost:8000/mcp/'), {
-        sessionId: '1a0063b088da458eb6a6ce504ea25bbc', // @todo
-      }),
+      transport: new StreamableHTTPClientTransport(new URL(mcpUrl)),
     })
 
     // const weatherMcpClient = await createMCPClient({
