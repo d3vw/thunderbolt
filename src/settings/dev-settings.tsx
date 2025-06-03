@@ -1,7 +1,7 @@
 import { useDrizzle } from '@/db/provider'
 import { settingsTable } from '@/db/tables'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import React from 'react'
 
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
@@ -13,7 +13,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
 const cloudFormSchema = z.object({
-  cloudUrl: z.string().url({ message: 'Please enter a valid URL.' }).or(z.string().length(0)),
+  cloudUrl: z.string(),
 })
 
 export default function DevSettingsPage() {
@@ -35,7 +35,7 @@ export default function DevSettingsPage() {
   const cloudForm = useForm<z.infer<typeof cloudFormSchema>>({
     resolver: zodResolver(cloudFormSchema),
     defaultValues: {
-      cloudUrl: 'http://localhost:8000',
+      cloudUrl: '',
     },
   })
 
@@ -51,9 +51,14 @@ export default function DevSettingsPage() {
   // Save cloud provider mutation
   const saveCloudMutation = useMutation({
     mutationFn: async (values: z.infer<typeof cloudFormSchema>) => {
-      // Delete and insert for cloud url setting
-      await db.delete(settingsTable).where(eq(settingsTable.key, 'cloud_url'))
-      await db.insert(settingsTable).values([{ key: 'cloud_url', value: values.cloudUrl }])
+      // Upsert the setting
+      await db
+        .insert(settingsTable)
+        .values({ key: 'cloud_url', value: values.cloudUrl })
+        .onConflictDoUpdate({
+          target: settingsTable.key,
+          set: { value: values.cloudUrl, updatedAt: sql`(unixepoch())` },
+        })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dev-settings'] })
@@ -63,8 +68,14 @@ export default function DevSettingsPage() {
 
   const handleCloudUrlBlur = async () => {
     const values = cloudForm.getValues()
-    if (cloudForm.formState.isValid) {
-      await saveCloudMutation.mutateAsync(values)
+    const isValid = await cloudForm.trigger('cloudUrl')
+    if (isValid && values.cloudUrl !== settings?.cloudUrl) {
+      try {
+        await saveCloudMutation.mutateAsync(values)
+        console.log('Cloud URL saved successfully')
+      } catch (error) {
+        console.error('Error saving cloud URL:', error)
+      }
     }
   }
 
@@ -74,7 +85,7 @@ export default function DevSettingsPage() {
 
       <SectionCard title="Cloud Provider">
         <Form {...cloudForm}>
-          <form className="flex flex-col gap-4">
+          <form className="flex flex-col gap-4" onSubmit={(e) => e.preventDefault()}>
             <FormField
               control={cloudForm.control}
               name="cloudUrl"
@@ -82,9 +93,9 @@ export default function DevSettingsPage() {
                 <FormItem>
                   <FormLabel>Cloud URL</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="http://localhost:8000" 
-                      {...field} 
+                    <Input
+                      placeholder="http://localhost:8000"
+                      {...field}
                       onBlur={() => {
                         field.onBlur()
                         handleCloudUrlBlur()

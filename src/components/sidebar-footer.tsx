@@ -83,6 +83,24 @@ export function SidebarFooter() {
                     UI Kit
                   </Link>
                 </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/">
+                    <Palette className="mr-2 size-4" />
+                    Welcome Screen
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/settings/accounts">
+                    <BadgeCheck className="mr-2 size-4" />
+                    Accounts
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/settings/thunderbolt-bridge">
+                    <Terminal className="mr-2 size-4" />
+                    Thunderbolt Bridge
+                  </Link>
+                </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem>

@@ -14,7 +14,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Bot, Server, SlidersHorizontal } from 'lucide-react'
 import { Link, Outlet, useLocation } from 'react-router'
 
 export default function SettingsLayout() {
@@ -45,6 +45,7 @@ export default function SettingsLayout() {
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild isActive={currentPath.includes('/settings/preferences')}>
                       <Link to="/settings/preferences">
+                        <SlidersHorizontal className="size-4" />
                         <span>Preferences</span>
                       </Link>
                     </SidebarMenuButton>
@@ -53,6 +54,7 @@ export default function SettingsLayout() {
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild isActive={currentPath.includes('/settings/models')}>
                       <Link to="/settings/models">
+                        <Bot className="size-4" />
                         <span>Models</span>
                       </Link>
                     </SidebarMenuButton>
@@ -61,26 +63,12 @@ export default function SettingsLayout() {
                   <SidebarMenuItem>
                     <SidebarMenuButton asChild isActive={currentPath.includes('/settings/mcp-servers')}>
                       <Link to="/settings/mcp-servers">
+                        <Server className="size-4" />
                         <span>MCP Servers</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
 
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={currentPath.includes('/settings/accounts')}>
-                      <Link to="/settings/accounts">
-                        <span>Accounts</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={currentPath.includes('/settings/thunderbolt-bridge')}>
-                      <Link to="/settings/thunderbolt-bridge">
-                        <span>Thunderbolt Bridge</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

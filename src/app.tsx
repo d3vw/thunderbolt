@@ -13,7 +13,7 @@ import ModelsPage from '@/settings/models'
 import PreferencesSettingsPage from '@/settings/preferences'
 import ThunderboltBridgeSettingsPage from '@/settings/thunderbolt-bridge'
 import { useEffect, useState } from 'react'
-import { seedAccounts, seedMcpServers, seedModels, seedSettings } from './dal'
+import { getOrCreateChatThread, seedAccounts, seedMcpServers, seedModels, seedSettings } from './dal'
 import { initializeDrizzleDatabase } from './db/database'
 import { migrate } from './db/migrate'
 import { DrizzleProvider } from './db/provider'
@@ -32,7 +32,6 @@ import { SideviewProvider } from './sideview/provider'
 import { ImapSyncClient, ImapSyncProvider } from './sync'
 import { InitData, SideviewType } from './types'
 import UiKitPage from './ui-kit'
-import WelcomePage from './welcome'
 
 const queryClient = new QueryClient()
 
@@ -47,8 +46,7 @@ function AppContent({ initData }: { initData: InitData }) {
         <Route path="/" element={<Layout />}>
           {/* Home routes with HomeLayout */}
           <Route element={<ChatLayout />}>
-            {/* <Route index element={<ChatNewPage />} /> */}
-            <Route index element={<WelcomePage />} />
+            <Route index element={<Navigate to={`/chats/${initData.initialThreadId}`} replace />} />
             <Route path="chats/:chatThreadId" element={<ChatDetailPage />} />
           </Route>
 
@@ -121,6 +119,9 @@ const init = async (): Promise<InitData> => {
     }
   }
 
+  // Get or create an initial chat thread
+  const initialThreadId = await getOrCreateChatThread(db)
+
   return {
     db,
     sqlite,
@@ -128,6 +129,7 @@ const init = async (): Promise<InitData> => {
     imapSync,
     sideviewType,
     sideviewId,
+    initialThreadId,
     ...tray,
   }
 }

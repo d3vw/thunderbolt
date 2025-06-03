@@ -1,10 +1,10 @@
-import { eq } from 'drizzle-orm'
+import { desc, eq, notExists } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
-import { accountsTable, emailMessagesTable, emailThreadsTable, mcpServersTable, modelsTable, settingsTable } from './db/tables'
+import { accountsTable, chatMessagesTable, chatThreadsTable, emailMessagesTable, emailThreadsTable, mcpServersTable, modelsTable, settingsTable } from './db/tables'
 import { DrizzleContextType, EmailThreadWithMessagesAndAddresses } from './types'
 
 export const seedAccounts = async (db: DrizzleContextType['db']) => {
-  const accounts = await db.select().from(accountsTable)
+  await db.select().from(accountsTable)
   // if (accounts.length === 0) {
   //   await db.insert(accountsTable).values({
   //     id: uuidv7(),
@@ -23,14 +23,6 @@ export const seedModels = async (db: DrizzleContextType['db']) => {
     const seedData = [
       {
         id: uuidv7(),
-        name: 'Llama 3.1 70B',
-        provider: 'thunderbolt' as const,
-        model: 'llama-v3p1-70b-instruct',
-        isSystem: 1,
-        enabled: 1,
-      },
-      {
-        id: uuidv7(),
         name: 'Llama 3.1 405B',
         provider: 'thunderbolt' as const,
         model: 'llama-v3p1-405b-instruct',
@@ -39,10 +31,26 @@ export const seedModels = async (db: DrizzleContextType['db']) => {
       },
       {
         id: uuidv7(),
+        name: 'Llama 3.1 70B',
+        provider: 'thunderbolt' as const,
+        model: 'llama-v3p1-70b-instruct',
+        isSystem: 1,
+        enabled: 1,
+      },
+      {
+        id: uuidv7(),
         name: 'Qwen 3 235B',
         provider: 'thunderbolt' as const,
         model: 'qwen3-235b-a22b',
-        isSystem: 1,
+        isSystem: 0,
+        enabled: 1,
+      },
+      {
+        id: uuidv7(),
+        name: 'DeepSeek R1 671B',
+        provider: 'thunderbolt' as const,
+        model: 'deepseek-r1-0528',
+        isSystem: 0,
         enabled: 1,
       },
       {
@@ -92,6 +100,39 @@ export const seedMcpServers = async (db: DrizzleContextType['db']) => {
       enabled: 1,
     })
   }
+}
+
+/**
+ * Gets an existing empty chat thread or creates a new one
+ * @returns The ID of the chat thread to use
+ */
+export const getOrCreateChatThread = async (db: DrizzleContextType['db']): Promise<string> => {
+  // First check if any threads exist
+  const threads = await db.select().from(chatThreadsTable).orderBy(desc(chatThreadsTable.id))
+
+  if (threads.length === 0) {
+    // No threads exist, create a new one
+    const chatThreadId = uuidv7()
+    await db.insert(chatThreadsTable).values({ id: chatThreadId, title: 'New Chat' })
+    return chatThreadId
+  }
+
+  // Check for empty threads first
+  const emptyThreads = await db
+    .select({ id: chatThreadsTable.id })
+    .from(chatThreadsTable)
+    .where(notExists(db.select().from(chatMessagesTable).where(eq(chatMessagesTable.chatThreadId, chatThreadsTable.id))))
+    .limit(1)
+
+  if (emptyThreads.length > 0) {
+    // Use the empty thread
+    return emptyThreads[0].id
+  }
+
+  // No empty threads, create a new one
+  const chatThreadId = uuidv7()
+  await db.insert(chatThreadsTable).values({ id: chatThreadId, title: 'New Chat' })
+  return chatThreadId
 }
 
 export const getEmailThreadByIdWithMessages = async (db: DrizzleContextType['db'], emailThreadId: string): Promise<EmailThreadWithMessagesAndAddresses | null> => {

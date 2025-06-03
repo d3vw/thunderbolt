@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useDrizzle } from '@/db/provider'
 import { modelsTable } from '@/db/tables'
 import { createModel } from '@/lib/ai'
@@ -317,6 +317,7 @@ export default function ModelsPage() {
             { id: 'llama-v3p1-405b-instruct', name: 'Llama 3.1 405B' },
             { id: 'qwen3-235b-a22b', name: 'Qwen 3 235B' },
             { id: 'qwen2p5-72b-instruct', name: 'Qwen 2.5 72B' },
+            { id: 'deepseek-r1-0528', name: 'DeepSeek R1 671B' },
           ])
           setIsLoadingModels(false)
           return
@@ -569,10 +570,12 @@ export default function ModelsPage() {
                                           </div>
                                         </CommandItem>
                                       ))}
-                                      <CommandItem value="custom" onSelect={() => handleSelectModel('custom')}>
-                                        <Check className={cn('mr-2 h-4 w-4', selectedModelId === 'custom' ? 'opacity-100' : 'opacity-0')} />
-                                        <span className="italic">Custom</span>
-                                      </CommandItem>
+                                      {form.watch('provider') !== 'thunderbolt' && (
+                                        <CommandItem value="custom" onSelect={() => handleSelectModel('custom')}>
+                                          <Check className={cn('mr-2 h-4 w-4', selectedModelId === 'custom' ? 'opacity-100' : 'opacity-0')} />
+                                          <span className="italic">Custom</span>
+                                        </CommandItem>
+                                      )}
                                     </CommandGroup>
                                   )}
                                 </CommandList>
@@ -695,39 +698,56 @@ export default function ModelsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>
-                          <Switch checked={isEnabled} onCheckedChange={(checked) => toggleModelMutation.mutate({ id: model.id, enabled: checked })} className="cursor-pointer" />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">
-                        <p>{isEnabled ? 'Disable model' : 'Enable model'}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Popover open={deleteConfirmOpen === model.id} onOpenChange={(open) => setDeleteConfirmOpen(open ? model.id : null)}>
-                      <PopoverTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={isSystemModel}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-80" side="bottom" align="end">
-                        <div className="space-y-3">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
                           <div>
-                            <h4 className="font-medium">Remove Model</h4>
-                            <p className="text-sm text-muted-foreground">Are you sure you want to remove this model? This action cannot be undone.</p>
+                            <Switch checked={isEnabled} onCheckedChange={(checked) => toggleModelMutation.mutate({ id: model.id, enabled: checked })} className="cursor-pointer" />
                           </div>
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={() => setDeleteConfirmOpen(null)}>
-                              Cancel
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          <p>{isEnabled ? 'Disable model' : 'Enable model'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    {isSystemModel ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled>
+                              <Trash2 className="h-4 w-4" />
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleDeleteModel(model.id)}>
-                              Remove
-                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            <p>System models can't be deleted</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <Popover open={deleteConfirmOpen === model.id} onOpenChange={(open) => setDeleteConfirmOpen(open ? model.id : null)}>
+                        <PopoverTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80" side="bottom" align="end">
+                          <div className="space-y-3">
+                            <div>
+                              <h4 className="font-medium">Remove Model</h4>
+                              <p className="text-sm text-muted-foreground">Are you sure you want to remove this model? This action cannot be undone.</p>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <Button variant="outline" size="sm" onClick={() => setDeleteConfirmOpen(null)}>
+                                Cancel
+                              </Button>
+                              <Button variant="destructive" size="sm" onClick={() => handleDeleteModel(model.id)}>
+                                Remove
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                        </PopoverContent>
+                      </Popover>
+                    )}
                   </div>
                 </div>
               </CardHeader>

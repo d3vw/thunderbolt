@@ -14,13 +14,13 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { getOrCreateChatThread } from '@/dal'
 import { useDrizzle } from '@/db/provider'
-import { chatMessagesTable, chatThreadsTable } from '@/db/tables'
+import { chatThreadsTable } from '@/db/tables'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { desc, eq, notExists } from 'drizzle-orm'
-import { Flame, Loader2, MoreHorizontal, SquarePen } from 'lucide-react'
+import { desc, eq } from 'drizzle-orm'
+import { Flame, Loader2, MoreHorizontal, Settings, SquarePen } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { v7 as uuidv7 } from 'uuid'
 
 export default function ChatSidebar() {
   const navigate = useNavigate()
@@ -36,18 +36,6 @@ export default function ChatSidebar() {
     },
   })
 
-  const createChatMutation = useMutation({
-    mutationFn: async () => {
-      const chatThreadId = uuidv7()
-      // @todo libsql will throw an error that "execute returned rows" if we try to do returning()
-      await db.insert(chatThreadsTable).values({ id: chatThreadId, title: 'New Chat' })
-      return chatThreadId
-    },
-    onSuccess: (chatThreadId) => {
-      queryClient.invalidateQueries({ queryKey: ['chatThreads'] })
-      navigate(`/chats/${chatThreadId}`)
-    },
-  })
 
   const deleteChatMutation = useMutation({
     mutationFn: async ({ id }: { id: string }) => {
@@ -69,20 +57,11 @@ export default function ChatSidebar() {
 
   const createNewChat = async () => {
     try {
-      const emptyThreads = await db
-        .select({ id: chatThreadsTable.id })
-        .from(chatThreadsTable)
-        .where(notExists(db.select().from(chatMessagesTable).where(eq(chatMessagesTable.chatThreadId, chatThreadsTable.id))))
-        .limit(1)
-
-      if (emptyThreads.length > 0) {
-        navigate(`/chats/${emptyThreads[0].id}`)
-      } else {
-        createChatMutation.mutate()
-      }
+      const chatThreadId = await getOrCreateChatThread(db)
+      queryClient.invalidateQueries({ queryKey: ['chatThreads'] })
+      navigate(`/chats/${chatThreadId}`)
     } catch (error) {
-      console.error('Error checking for empty threads:', error)
-      createChatMutation.mutate()
+      console.error('Error creating new chat:', error)
     }
   }
 
@@ -92,9 +71,6 @@ export default function ChatSidebar() {
         <SidebarGroup>
           <SidebarGroupContent className="flex justify-between w-full flex-1">
             <SidebarTrigger className="cursor-pointer" />
-            <SidebarMenuButton onClick={createNewChat} className="w-fit pr-0 pl-0 aspect-square items-center justify-center cursor-pointer" tooltip="New Chat">
-              <SquarePen className="size-5" />
-            </SidebarMenuButton>
           </SidebarGroupContent>
         </SidebarGroup>
 
@@ -102,15 +78,15 @@ export default function ChatSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link to="/">
-                    <span>Home</span>
-                  </Link>
+                <SidebarMenuButton onClick={createNewChat} className="cursor-pointer">
+                  <SquarePen className="size-4" />
+                  <span>New Chat</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <Link to="/settings/preferences">
+                    <Settings className="size-4" />
                     <span>Settings</span>
                   </Link>
                 </SidebarMenuButton>
