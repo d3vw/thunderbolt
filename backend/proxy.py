@@ -89,6 +89,7 @@ class ProxyService:
                 headers[key] = value
 
         # Add API key as header if configured and not using query param mode
+        # Only override if api_key is not empty
         if config.api_key and not config.api_key_as_query_param:
             # Special handling for Authorization header - add Bearer prefix if needed
             if (
@@ -98,6 +99,13 @@ class ProxyService:
                 headers[config.api_key_header] = f"Bearer {config.api_key}"
             else:
                 headers[config.api_key_header] = config.api_key
+
+        # Add SDK headers for Flower AI
+        if "flower" in str(config.target_url).lower():
+            # Add Flower SDK specific headers
+            headers["X-Flower-SDK-Version"] = "0.1.8"
+            headers["X-Flower-SDK-Language"] = "TS"
+            headers["User-Agent"] = "Flower-Intelligence-SDK/0.1.8 (TS)"
 
         # Remove host header as it will be set by httpx
         headers.pop("host", None)
@@ -211,6 +219,9 @@ class ProxyService:
 
         # Read the request body once at the beginning
         body = await request.body()
+        logger.info(f"[ProxyService] Proxying {request.method} request to path: {path}")
+        logger.info(f"[ProxyService] Target URL base: {config.target_url}")
+        logger.info(f"[ProxyService] Has API key: {'Yes' if config.api_key else 'No'}")
 
         # Check if this is a streaming request
         is_streaming = False
@@ -264,8 +275,9 @@ class ProxyService:
 
         try:
             # Make the proxied request
-            logger.info(f"Proxying request to: {target_url}")
-            logger.info(f"Request headers: {headers}")
+            logger.info(f"[ProxyService] Full target URL: {target_url}")
+            logger.info(f"[ProxyService] Request headers: {headers}")
+            logger.info(f"[ProxyService] Body length: {len(body) if body else 0}")
             response = await self.client.request(
                 method=request.method,
                 url=target_url,
@@ -273,6 +285,8 @@ class ProxyService:
                 content=body,
                 follow_redirects=False,
             )
+            logger.info(f"[ProxyService] Response status: {response.status_code}")
+            logger.info(f"[ProxyService] Response headers: {dict(response.headers)}")
 
             # Create response headers
             response_headers = dict(response.headers)

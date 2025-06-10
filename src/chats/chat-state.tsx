@@ -83,6 +83,8 @@ export default function ChatState({ id, models, initialMessages, saveMessages }:
 
         const model = await getSelectedModel(db as unknown as SqliteRemoteDatabase)
 
+        // All models now use the standard AI SDK flow
+        // Flower models will use the custom provider with encryption support
         return aiFetchStreamingResponse({
           init,
           saveMessages,

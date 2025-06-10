@@ -2,7 +2,7 @@ import { useAutoScroll } from '@/hooks/use-auto-scroll'
 import { Model } from '@/types'
 import type { UseChatHelpers } from '@ai-sdk/react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUp } from 'lucide-react'
+import { ArrowUp, Lock } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -196,7 +196,10 @@ export default function ChatUI({ chatHelpers, models, selectedModel, onModelChan
                 <SelectContent>
                   {models.map((model) => (
                     <SelectItem key={model.id} value={model.id}>
-                      <p className="text-left">{model.name}</p>
+                      <div className="flex items-center gap-2">
+                        {model.isConfidential ? <Lock className="size-3.5" /> : null}
+                        <p className="text-left">{model.name}</p>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>

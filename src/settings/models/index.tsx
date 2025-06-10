@@ -26,7 +26,7 @@ import { z } from 'zod'
 
 interface Model {
   id: string
-  provider: 'openai' | 'fireworks' | 'openai_compatible' | 'thunderbolt'
+  provider: 'openai' | 'fireworks' | 'openai_compatible' | 'thunderbolt' | 'flower'
   name: string
   model: string
   url: string | null
@@ -45,7 +45,7 @@ interface AvailableModel {
 
 const formSchema = z
   .object({
-    provider: z.enum(['thunderbolt', 'openai', 'fireworks', 'openai_compatible']),
+    provider: z.enum(['thunderbolt', 'openai', 'fireworks', 'openai_compatible', 'flower']),
     name: z.string().min(1, { message: 'Name is required.' }),
     model: z.string().min(1, { message: 'Model name is required.' }),
     customModel: z.string().optional(),
@@ -67,8 +67,8 @@ const formSchema = z
   )
   .refine(
     (data) => {
-      if (data.provider === 'thunderbolt') {
-        return true // API key not required for thunderbolt
+      if (data.provider === 'thunderbolt' || data.provider === 'flower') {
+        return true // API key not required for thunderbolt or flower
       }
       if (data.provider === 'openai_compatible') {
         return true // API key is optional for openai_compatible
@@ -145,7 +145,7 @@ export default function ModelsPage() {
   })
 
   type FormData = z.infer<typeof formSchema>
-  
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -211,7 +211,7 @@ export default function ModelsPage() {
       }
 
       // Use the same createModel function as the chat
-      const modelConfigWithDefaults = { ...modelConfig, toolUsage: 1 }
+      const modelConfigWithDefaults = { ...modelConfig, toolUsage: 1, isConfidential: 0 }
       const model = await createModel(modelConfigWithDefaults)
 
       // Test with a minimal prompt - race against timeout
@@ -318,7 +318,17 @@ export default function ModelsPage() {
         // For OpenAI Compatible, try even without API key, otherwise require API key
         if (provider === 'openai_compatible' || apiKey) {
           const response = await ky.get(endpoint, { headers }).json<{ data: AvailableModel[] }>()
-          setAvailableModels(response.data || [])
+
+          let models = response.data || []
+
+          // For OpenAI, whitelist only the latest/current models
+          if (provider === 'openai') {
+            const whitelist = ['gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini', 'o1-preview', 'gpt-4-turbo', 'gpt-4-turbo-preview', 'gpt-4']
+
+            models = models.filter((model) => whitelist.includes(model.id))
+          }
+
+          setAvailableModels(models)
         }
       }
     } catch (error) {
@@ -342,6 +352,7 @@ export default function ModelsPage() {
         isSystem: 1,
         enabled: 1,
         toolUsage: 1,
+        isConfidential: 0,
       })
 
       const { text } = await generateText({
@@ -440,6 +451,8 @@ export default function ModelsPage() {
         return 'Fireworks'
       case 'openai_compatible':
         return 'OpenAI Compatible'
+      case 'flower':
+        return 'Flower'
       default:
         return provider
     }
@@ -486,6 +499,7 @@ export default function ModelsPage() {
                             <SelectItem value="openai">OpenAI</SelectItem>
                             <SelectItem value="fireworks">Fireworks</SelectItem>
                             <SelectItem value="openai_compatible">OpenAI Compatible</SelectItem>
+                            <SelectItem value="flower">Flower</SelectItem>
                           </SelectContent>
                         </Select>
                       </FormControl>

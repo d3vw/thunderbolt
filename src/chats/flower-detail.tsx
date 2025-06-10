@@ -1,5 +1,5 @@
 import { useDrizzle } from '@/db/provider'
-import { chatMessagesTable, chatThreadsTable, modelsTable, settingsTable } from '@/db/tables'
+import { chatMessagesTable, chatThreadsTable } from '@/db/tables'
 import { createModel } from '@/lib/ai'
 import { convertDbChatMessageToUIMessage, convertUIMessageToDbChatMessage } from '@/lib/utils'
 import { SaveMessagesFunction } from '@/types'
@@ -7,9 +7,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { UIMessage, generateText } from 'ai'
 import { eq, sql } from 'drizzle-orm'
 import { useParams } from 'react-router'
-import Chat from './chat'
+import FlowerChat from './flower-chat'
 
-export default function ChatDetailPage() {
+export default function FlowerChatDetailPage() {
   const params = useParams()
   const { db } = useDrizzle()
   const queryClient = useQueryClient()
@@ -39,26 +39,6 @@ export default function ChatDetailPage() {
 
       if (!thread) {
         throw new Error('Thread not found')
-      }
-
-      // Check if this is the first message and if we're using a confidential model
-      const existingMessages = await db.select().from(chatMessagesTable).where(eq(chatMessagesTable.chatThreadId, params.chatThreadId!)).limit(1)
-      
-      if (existingMessages.length === 0 && !thread.isEncrypted) {
-        // Get the selected model to check if it's confidential
-        const selectedModelId = await db.select().from(settingsTable).where(eq(settingsTable.key, 'selected_model')).get()
-        if (selectedModelId) {
-          const model = await db
-            .select()
-            .from(modelsTable)
-            .where(eq(modelsTable.id, selectedModelId.value as string))
-            .get()
-          
-          if (model && model.isConfidential) {
-            // Update thread to be encrypted
-            await db.update(chatThreadsTable).set({ isEncrypted: 1 }).where(eq(chatThreadsTable.id, params.chatThreadId!))
-          }
-        }
       }
 
       // Insert messages
@@ -108,11 +88,14 @@ export default function ChatDetailPage() {
 
           const { text } = await generateText({
             model,
-            prompt: `Generate a concise title-cased title (max 30 characters) for a chat conversation that starts with this message: "${messageContent}". Return only the title, no quotes or punctuation.`,
+            prompt: `Generate a concise title-cased title (max 30 characters) for a Flower AI chat conversation that starts with this message: "${messageContent}". Return only the title, no quotes or punctuation.`,
           })
 
-          // Update the thread title
-          await db.update(chatThreadsTable).set({ title: text.trim() }).where(eq(chatThreadsTable.id, params.chatThreadId!))
+          // Update the thread title with Flower AI prefix
+          await db
+            .update(chatThreadsTable)
+            .set({ title: `🌸 ${text.trim()}` })
+            .where(eq(chatThreadsTable.id, params.chatThreadId!))
         }
       } catch (error) {
         console.error('Error generating title:', error)
@@ -136,13 +119,13 @@ export default function ChatDetailPage() {
     <>
       <div className="h-full w-full">
         {isLoading ? (
-          <div>Loading chat...</div>
+          <div>Loading Flower AI chat...</div>
         ) : isError ? (
-          <div>Error loading chat</div>
+          <div>Error loading Flower AI chat</div>
         ) : messages ? (
-          <Chat key={params.chatThreadId} id={params.chatThreadId} initialMessages={messages} saveMessages={saveMessages} />
+          <FlowerChat key={params.chatThreadId} id={params.chatThreadId} initialMessages={messages} saveMessages={saveMessages} />
         ) : (
-          <div>Error loading chat</div>
+          <div>Error loading Flower AI chat</div>
         )}
       </div>
     </>

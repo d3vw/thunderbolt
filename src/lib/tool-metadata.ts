@@ -89,6 +89,7 @@ async function generateLLMMetadata(toolName: string, args?: any): Promise<ToolMe
       isSystem: 1,
       enabled: 1,
       toolUsage: 0,
+      isConfidential: 0,
     })
 
     // Create a context string with tool name and args

@@ -20,13 +20,13 @@
       }
     ],
     "security": {
-      "csp": null,
-      "dangerousDisableAssetCspModification": ["script-src", "style-src"],
-      "pattern": {
-        "use": "isolation",
-        "options": {
-          "dir": "../dist-isolation"
-        }
+      "dangerousDisableAssetCspModification": false,
+      "csp": {
+        "default-src": "'self' tauri: asset:",
+        "connect-src": "ipc:",
+        "img-src": "'self' asset: data:",
+        "font-src": "'self' data:",
+        "style-src": "'self' 'unsafe-inline'"
       }
     }
   },

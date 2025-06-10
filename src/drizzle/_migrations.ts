@@ -23,5 +23,10 @@ export const migrations: Migration[] = [
     "hash": "0002_add_tool_usage_to_models",
     "name": "0002_add_tool_usage_to_models.sql",
     "sql": "ALTER TABLE `models` ADD COLUMN `tool_usage` integer DEFAULT 1 NOT NULL;"
+  },
+  {
+    "hash": "0003_add_confidential_fields",
+    "name": "0003_add_confidential_fields.sql",
+    "sql": "-- Add isConfidential field to models table\nALTER TABLE models ADD COLUMN is_confidential INTEGER NOT NULL DEFAULT 0;\n\n-- Add isEncrypted field to chat_threads table  \nALTER TABLE chat_threads ADD COLUMN is_encrypted INTEGER NOT NULL DEFAULT 0;"
   }
 ];

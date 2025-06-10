@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from functools import lru_cache
@@ -10,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import Settings
+from flower_auth import get_flower_api_key
 from mcp_tools.server import mcp
 from proxy import ProxyConfig, ProxyService, get_proxy_service
 
@@ -106,6 +108,20 @@ async def proxy_lifespan(app: FastAPI) -> Any:
             ),
         )
 
+    # Flower AI proxy
+    if settings.flower_mgmt_key and settings.flower_proj_id:
+        proxy_service.register_proxy(
+            "/flower",
+            ProxyConfig(
+                target_url="https://api.flower.ai",
+                api_key="",  # Will be set dynamically per request
+                api_key_header="Authorization",
+                api_key_as_query_param=False,
+                require_auth=False,  # Allow preflight requests
+                supports_streaming=True,  # Enable streaming support
+            ),
+        )
+
     # Add more proxy configurations as needed
     # proxy_service.register_proxy("/proxy/another-api", ProxyConfig(...))
 
@@ -133,6 +149,12 @@ async def combined_lifespan(app: FastAPI) -> Any:
 
         yield
 
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, get_settings().log_level),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 
 # Create FastAPI app instance
 app = FastAPI(
@@ -207,6 +229,97 @@ async def search_locations(query: str) -> Any:
             raise HTTPException(
                 status_code=503, detail="Geocoding service unavailable"
             ) from e
+
+
+@app.post("/flower/api-key")
+async def get_flower_api_key_endpoint(request: Request) -> dict[str, str]:
+    """Get a Flower API key for the authenticated user."""
+    settings = get_settings()
+
+    if not settings.flower_mgmt_key or not settings.flower_proj_id:
+        raise HTTPException(status_code=503, detail="Flower AI not configured")
+
+    # For now, we'll use a simple user ID hash based on request headers
+    # In a real implementation, you'd want proper user authentication
+    user_agent = request.headers.get("user-agent", "")
+    client_ip = "unknown"
+    if request.client is not None:
+        client_ip = getattr(request.client, "host", "unknown")
+    user_id_hash = f"{user_agent}:{client_ip}"
+
+    try:
+        api_key = get_flower_api_key(user_id_hash, settings=settings)
+        return {"api_key": api_key}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get Flower API key: {str(e)}"
+        ) from e
+
+
+# Flower AI proxy endpoints
+@app.api_route(
+    "/flower/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    include_in_schema=False,  # Hide from OpenAPI schema as it's a proxy
+)
+async def flower_proxy_endpoint(
+    path: str,
+    request: Request,
+    proxy_service: ProxyService = Depends(get_proxy_service),
+) -> Any:
+    """Flower AI proxy endpoint."""
+    logger = logging.getLogger(__name__)
+
+    logger.info(f"Flower proxy request: {request.method} /flower/{path}")
+    logger.info(f"Headers: {dict(request.headers)}")
+
+    # Handle OPTIONS preflight requests
+    if request.method == "OPTIONS":
+        logger.info("Handling OPTIONS preflight request")
+        return JSONResponse({"status": "ok"})
+
+    # Get the configuration for this path
+    config = proxy_service.get_config("/flower")
+    if not config:
+        logger.error("Flower AI proxy not configured")
+        raise HTTPException(status_code=404, detail="Flower AI proxy not configured")
+
+    # Log the request body if it's a POST
+    if request.method == "POST":
+        body = await request.body()
+        logger.info(f"Request body: {body.decode('utf-8') if body else 'empty'}")
+        # Store the body so it can be read again by the proxy
+        # Note: This is a workaround for FastAPI's request body consumption
+        request._body = body  # type: ignore[attr-defined]
+
+    # Check if the client already has an API key in the Authorization header
+    existing_auth = request.headers.get("authorization", "")
+    logger.info(
+        f"Existing authorization header: {existing_auth[:20]}..."
+        if existing_auth
+        else "No existing auth"
+    )
+
+    # For Flower AI, the client already provides the API key, so we just pass it through
+    # We don't need to generate a new one
+    if existing_auth and existing_auth.startswith("Bearer fk_"):
+        logger.info("Using client-provided Flower API key")
+        # Don't modify the config.api_key - let the proxy pass through the existing header
+    else:
+        logger.info("No valid Flower API key in request, request may fail")
+
+    # Don't override the API key in config - the proxy will pass through existing headers
+    config.api_key = ""
+
+    # Proxy the request
+    logger.info(f"Proxying request to {config.target_url}/{path}")
+    try:
+        result = await proxy_service.proxy_request(request, path, config)
+        logger.info("Proxy request successful")
+        return result
+    except Exception as e:
+        logger.error(f"Proxy request failed: {str(e)}", exc_info=True)
+        raise
 
 
 # OpenAI-compatible endpoints

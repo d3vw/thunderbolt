@@ -29,6 +29,7 @@ export const settingsTable = sqliteTable('settings', {
 export const chatThreadsTable = sqliteTable('chat_threads', {
   id: text('id').primaryKey().notNull().unique(),
   title: text('title'),
+  isEncrypted: integer('is_encrypted').default(0).notNull(),
 })
 
 export const chatMessagesTable = sqliteTable('chat_messages', {
@@ -93,7 +94,7 @@ export const todosTable = sqliteTable('todos', {
 
 export const modelsTable = sqliteTable('models', {
   id: text('id').primaryKey().notNull().unique(),
-  provider: text('provider', { enum: ['openai', 'fireworks', 'openai_compatible', 'thunderbolt'] }).notNull(),
+  provider: text('provider', { enum: ['openai', 'fireworks', 'openai_compatible', 'thunderbolt', 'flower'] }).notNull(),
   name: text('name').notNull(),
   model: text('model').notNull(),
   url: text('url'),
@@ -101,6 +102,7 @@ export const modelsTable = sqliteTable('models', {
   isSystem: integer('is_system').default(0),
   enabled: integer('enabled').default(1).notNull(),
   toolUsage: integer('tool_usage').default(1).notNull(),
+  isConfidential: integer('is_confidential').default(0).notNull(),
 })
 
 export const embeddingsTable = sqliteTable('embeddings', {

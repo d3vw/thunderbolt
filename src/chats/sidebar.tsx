@@ -19,7 +19,7 @@ import { useDrizzle } from '@/db/provider'
 import { chatThreadsTable } from '@/db/tables'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { desc, eq } from 'drizzle-orm'
-import { Flame, Loader2, MoreHorizontal, Settings, SquarePen } from 'lucide-react'
+import { Flame, Loader2, Lock, MoreHorizontal, Settings, SquarePen } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 
 export default function ChatSidebar() {
@@ -35,7 +35,6 @@ export default function ChatSidebar() {
       return db.select().from(chatThreadsTable).orderBy(desc(chatThreadsTable.id))
     },
   })
-
 
   const deleteChatMutation = useMutation({
     mutationFn: async ({ id }: { id: string }) => {
@@ -69,6 +68,7 @@ export default function ChatSidebar() {
       console.error('Error creating new chat:', error)
     }
   }
+
 
   return (
     <Sidebar>
@@ -128,7 +128,10 @@ export default function ChatSidebar() {
                 <SidebarMenuItem>
                   <Link to={`/chats/${thread.id}`}>
                     <SidebarMenuButton isActive={thread.id === currentChatThreadId} className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground cursor-pointer">
-                      <span className="truncate">{thread.title}</span>
+                      <div className="flex items-center gap-2 flex-1">
+                        {thread.isEncrypted ? <Lock className="size-3.5 shrink-0" /> : null}
+                        <span className="truncate">{thread.title}</span>
+                      </div>
                       <DropdownMenuTrigger asChild>
                         <MoreHorizontal className="ml-auto" />
                       </DropdownMenuTrigger>

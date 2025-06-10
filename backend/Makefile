@@ -40,7 +40,7 @@ lint:
 
 # Run type checking
 type-check:
-	uv run ty check *.py
+	uv run ty check .
 
 # Run tests
 test:

@@ -18,7 +18,7 @@ import { Trash2 } from 'lucide-react'
 
 const formSchema = z
   .object({
-    provider: z.enum(['thunderbolt', 'openai', 'fireworks', 'openai_compatible']),
+    provider: z.enum(['thunderbolt', 'openai', 'fireworks', 'openai_compatible', 'flower']),
     name: z.string().min(1, { message: 'Name is required.' }),
     model: z.string().min(1, { message: 'Model name is required.' }),
     url: z.string().optional(),
@@ -40,6 +40,9 @@ const formSchema = z
     (data) => {
       if (data.provider === 'openai_compatible') {
         return true // API key is optional for openai_compatible
+      }
+      if (data.provider === 'thunderbolt' || data.provider === 'flower') {
+        return true // API key not required for thunderbolt or flower
       }
       return data.apiKey !== undefined && data.apiKey.length > 0
     },

@@ -1,20 +1,40 @@
-.PHONY: help install build build-desktop build-android build-ios clean lint format format-check type-check test check
+.PHONY: help setup install build build-desktop build-android build-ios clean
+
+# Color definitions
+BLUE := \033[0;34m
+GREEN := \033[0;32m
+YELLOW := \033[0;33m
+NC := \033[0m # No Color
 
 # Default target
 help:
 	@echo "Available commands:"
+	@echo "  make setup          - Initialize submodules and install all dependencies"
 	@echo "  make install        - Install frontend dependencies"
 	@echo "  make build          - Build frontend for production"
 	@echo "  make build-desktop  - Build Tauri desktop app"
 	@echo "  make build-android  - Build Tauri Android app"
 	@echo "  make build-ios      - Build Tauri iOS app"
 	@echo "  make clean          - Clean build artifacts"
-	@echo "  make lint           - Run linter on source files"
-	@echo "  make format         - Format source files"
-	@echo "  make format-check   - Check if source files are formatted"
-	@echo "  make type-check     - Run TypeScript type checking"
-	@echo "  make test           - Run tests"
-	@echo "  make check          - Run all checks (type-check, lint, format-check)"
+
+# Setup project - initialize submodules and install all dependencies
+setup:
+	@echo "$(BLUE)→ Initializing git submodules...$(NC)"
+	git submodule update --init --recursive
+	@echo "$(BLUE)→ Installing frontend dependencies...$(NC)"
+	bun install
+	@echo "$(BLUE)→ Installing backend dependencies...$(NC)"
+	cd backend && uv sync --frozen
+	@echo "$(BLUE)→ Setting up Flower framework (optional)...$(NC)"
+	@if [ -d flower/framework ]; then \
+		echo "$(YELLOW)  Found Flower framework. Setting up environment...$(NC)"; \
+		cd flower && ./dev/setup-envs.sh || true; \
+		echo "$(YELLOW)  Note: Flower framework setup is optional. Install it manually if needed:$(NC)"; \
+		echo "$(YELLOW)  cd flower/framework && pip install -e .$(NC)"; \
+	else \
+		echo "$(YELLOW)  Flower framework not found. Skipping...$(NC)"; \
+	fi
+	@echo "$(GREEN)✓ Setup complete!$(NC)"
 
 # Install dependencies
 install:

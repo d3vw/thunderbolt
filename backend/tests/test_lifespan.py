@@ -40,24 +40,5 @@ async def mock_mcp_lifespan(app: Any) -> AsyncIterator[None]:
     yield
 
 
-@pytest.mark.asyncio
-async def test_combined_lifespan() -> None:
-    """Test that the combined lifespan function works correctly but without actually executing the MCP lifespan."""
-    # We can test that combined_lifespan doesn't fail even without patching mcp_app.lifespan
-    # Skip this test because we can't easily mock the MCP app's lifespan property
-    pytest.skip("Can't patch the MCP app's lifespan property")
-
-
-@pytest.mark.asyncio
-async def test_server_startup_and_shutdown() -> None:
-    """Test that the server can start up and shut down with the combined lifespan."""
-    # Skip this test because we can't easily mock the MCP app's lifespan property
-    pytest.skip("Can't patch the MCP app's lifespan property")
-
-    # Instead, we'll verify that the combined_lifespan exists and is callable
-    # This line is unreachable due to pytest.skip above
-    pass
-
-
 # Debug code to help identify if the module is being loaded
 print("test_lifespan.py module was loaded")

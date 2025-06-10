@@ -9,6 +9,7 @@ import { convertToModelMessages, experimental_createMCPClient, extractReasoningM
 import { eq } from 'drizzle-orm'
 import { createToolset, tools } from './tools'
 import { getCloudUrl } from './config'
+import { createFlower, isFlowerModel } from './ai-providers/flower'
 
 export type ToolInvocationWithResult<T = object> = ToolInvocation & {
   result: T
@@ -42,8 +43,8 @@ const createPrompt = ({ preferredName, location }: PromptParams) => {
 
     // —— Self-consistency check ——
     `Before sending your final reply, silently ask yourself:`,
-    `“Did I *successfully* call a tool to obtain every live fact I'm about to state?”`,
-    `If the answer is “no”, refuse as instructed above.`,
+    `"Did I *successfully* call a tool to obtain every live fact I'm about to state?"`,
+    `If the answer is "no", refuse as instructed above.`,
 
     // —— Style guide ——
     `Respond in plain text or Markdown.  Do not reveal tool names, JSON, or internal reasoning.`,
@@ -101,6 +102,27 @@ export const createModel = async (modelConfig: Model): Promise<LanguageModel> =>
       const model = fireworks(modelConfig.model)
 
       return model as LanguageModel
+    }
+    case 'flower': {
+      // Use our custom Flower provider for true E2E encryption
+      if (isFlowerModel(modelConfig.model)) {
+        const flower = createFlower({
+          encrypt: modelConfig.isConfidential ? true : false,
+        })
+        return flower(modelConfig.model) as LanguageModel
+      } else {
+        // Fallback to OpenAI compatible for unknown models
+        const { db } = await getDrizzleDatabase()
+        const cloudUrlSetting = await db.select().from(settingsTable).where(eq(settingsTable.key, 'cloud_url')).get()
+        const cloudUrl = (cloudUrlSetting?.value as string) || 'http://localhost:8000'
+
+        const openaiCompatible = createOpenAICompatible({
+          name: 'flower',
+          baseURL: `${cloudUrl}/flower`,
+          apiKey: 'dynamic', // API key will be handled by the backend
+        })
+        return openaiCompatible(modelConfig.model) as LanguageModel
+      }
     }
     case 'openai_compatible': {
       if (!modelConfig.url) {

@@ -1,8 +1,8 @@
+import { getDefaultCloudUrl } from '@/lib/config'
 import { desc, eq, notExists } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
 import { accountsTable, chatMessagesTable, chatThreadsTable, emailMessagesTable, emailThreadsTable, mcpServersTable, modelsTable, settingsTable } from './db/tables'
 import { DrizzleContextType, EmailThreadWithMessagesAndAddresses } from './types'
-import { getDefaultCloudUrl } from '@/lib/config'
 
 export const seedAccounts = async (db: DrizzleContextType['db']) => {
   await db.select().from(accountsTable)
@@ -29,6 +29,7 @@ export const seedModels = async (db: DrizzleContextType['db']) => {
         model: 'llama-v3p1-405b-instruct',
         isSystem: 1,
         enabled: 1,
+        isConfidential: 0,
       },
       {
         id: uuidv7(),
@@ -37,6 +38,7 @@ export const seedModels = async (db: DrizzleContextType['db']) => {
         model: 'llama-v3p1-70b-instruct',
         isSystem: 1,
         enabled: 1,
+        isConfidential: 0,
       },
       {
         id: uuidv7(),
@@ -45,6 +47,7 @@ export const seedModels = async (db: DrizzleContextType['db']) => {
         model: 'qwen3-235b-a22b',
         isSystem: 0,
         enabled: 1,
+        isConfidential: 0,
       },
       // {
       //   id: uuidv7(),
@@ -62,6 +65,18 @@ export const seedModels = async (db: DrizzleContextType['db']) => {
         url: 'http://localhost:11434/v1',
         isSystem: 0,
         enabled: 1,
+        isConfidential: 0,
+      },
+      // Confidential Compute model
+      {
+        id: uuidv7(),
+        name: 'Mistral Small 24B (Confidential)',
+        provider: 'flower' as const,
+        model: 'mistralai/mistral-small-3.1-24b',
+        isSystem: 0,
+        enabled: 1,
+        toolUsage: 0, // Disabled due to inconsistent tool calling with Mistral models
+        isConfidential: 1,
       },
     ]
     for (const model of seedData) {
@@ -109,14 +124,14 @@ export const seedMcpServers = async (db: DrizzleContextType['db']) => {
  * Gets an existing empty chat thread or creates a new one
  * @returns The ID of the chat thread to use
  */
-export const getOrCreateChatThread = async (db: DrizzleContextType['db']): Promise<string> => {
+export const getOrCreateChatThread = async (db: DrizzleContextType['db'], isEncrypted: boolean = false): Promise<string> => {
   // First check if any threads exist
   const threads = await db.select().from(chatThreadsTable).orderBy(desc(chatThreadsTable.id))
 
   if (threads.length === 0) {
     // No threads exist, create a new one
     const chatThreadId = uuidv7()
-    await db.insert(chatThreadsTable).values({ id: chatThreadId, title: 'New Chat' })
+    await db.insert(chatThreadsTable).values({ id: chatThreadId, title: 'New Chat', isEncrypted: isEncrypted ? 1 : 0 })
     return chatThreadId
   }
 
@@ -134,7 +149,7 @@ export const getOrCreateChatThread = async (db: DrizzleContextType['db']): Promi
 
   // No empty threads, create a new one
   const chatThreadId = uuidv7()
-  await db.insert(chatThreadsTable).values({ id: chatThreadId, title: 'New Chat' })
+  await db.insert(chatThreadsTable).values({ id: chatThreadId, title: 'New Chat', isEncrypted: isEncrypted ? 1 : 0 })
   return chatThreadId
 }
 

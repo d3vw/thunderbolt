@@ -43,9 +43,44 @@ brew install cmake # Mac only
 
 ## Setup
 
+### Prerequisites
+
+- [Rust](https://rustup.rs/) - See Rust Setup section below
+- [Bun](https://bun.sh/) - JavaScript runtime and package manager
+- [uv](https://github.com/astral-sh/uv) - Python package manager for backend
+- Python 3.9+ - For Flower framework and backend
+
+### Quick Setup
+
 ```sh
-git clone
+# Clone the repository with submodules
+git clone --recurse-submodules https://github.com/thunderbird/thunderbolt.git
+cd thunderbolt
+
+# Run the setup command to initialize everything
+make setup
+```
+
+The `make setup` command will:
+1. Initialize and update git submodules (including the Flower framework)
+2. Install frontend dependencies with bun
+3. Install backend dependencies with uv
+4. Configure Flower framework environment (optional - manual installation may be needed)
+
+### Manual Setup (if needed)
+
+```sh
+# Initialize submodules
+git submodule update --init --recursive
+
+# Install frontend dependencies
 bun install
+
+# Install backend dependencies
+cd backend && uv sync --frozen && cd ..
+
+# Set up Flower framework (optional)
+cd flower/framework && pip install -e . && cd ../..
 ```
 
 ## Run
