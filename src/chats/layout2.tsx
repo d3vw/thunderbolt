@@ -1,5 +1,5 @@
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
-import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarInset, SidebarMenuButton, SidebarTrigger, useSidebar } from '@/components/ui/sidebar'
+import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarInset, SidebarMenuButton, SidebarProvider, SidebarTrigger, useSidebar } from '@/components/ui/sidebar'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useSideview } from '@/sideview/provider'
 import { Menu, Sidebar } from 'lucide-react'
@@ -12,7 +12,7 @@ import { Sideview } from './sideview'
 function HeaderContent() {
   const { open } = useSidebar()
   const isMobile = useIsMobile()
-  
+
   return (
     <>
       {isMobile ? (
@@ -29,6 +29,7 @@ function HeaderContent() {
 export default function Page() {
   const ref = useRef<ImperativePanelHandle>(null)
   const { sideviewId, setSideview } = useSideview()
+  const { open, setOpen } = useSidebar()
 
   useEffect(() => {
     if (sideviewId) {
@@ -39,7 +40,7 @@ export default function Page() {
   }, [sideviewId])
 
   return (
-    <>
+    <SidebarProvider open={open} onOpenChange={setOpen}>
       <ChatSidebar />
       <SidebarInset className="h-full overflow-hidden flex flex-col">
         <ResizablePanelGroup direction="horizontal" autoSaveId="sideview" className="h-full">
@@ -74,6 +75,6 @@ export default function Page() {
           )}
         </ResizablePanelGroup>
       </SidebarInset>
-    </>
+    </SidebarProvider>
   )
 }

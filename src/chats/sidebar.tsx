@@ -69,7 +69,6 @@ export default function ChatSidebar() {
     }
   }
 
-
   return (
     <Sidebar>
       <SidebarContent className="flex flex-col h-full">
