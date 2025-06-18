@@ -9,7 +9,6 @@ import { useChat } from '@ai-sdk/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { defaultChatStore, UIMessage } from 'ai'
 import { eq } from 'drizzle-orm'
-import { SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy'
 import { v7 as uuidv7 } from 'uuid'
 
 interface ChatStateProps {
@@ -63,7 +62,7 @@ export default function ChatState({ id, models, initialMessages, saveMessages }:
           throw new Error('No init found')
         }
 
-        const model = await getSelectedModel(db as unknown as SqliteRemoteDatabase)
+        const model = await getSelectedModel(db)
 
         // All models now use the standard AI SDK flow
         // Flower models will use the custom provider with encryption support
