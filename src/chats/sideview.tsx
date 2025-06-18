@@ -17,11 +17,11 @@ export function Sideview({}: {}) {
 
       switch (sideviewType) {
         case 'message':
-          return await getEmailThreadByMessageIdWithMessages(db, sideviewId)
+          return await getEmailThreadByMessageIdWithMessages(sideviewId)
         case 'imap':
-          return await getEmailThreadByMessageImapIdWithMessages(db, sideviewId)
+          return await getEmailThreadByMessageImapIdWithMessages(sideviewId)
         case 'thread':
-          return await getEmailThreadByIdWithMessages(db, sideviewId)
+          return await getEmailThreadByIdWithMessages(sideviewId)
         default:
           return null
       }

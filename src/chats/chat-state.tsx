@@ -26,7 +26,7 @@ export default function ChatState({ id, models, initialMessages, saveMessages }:
   const { data: selectedModel } = useQuery<Model>({
     queryKey: ['settings', 'selected_model'],
     queryFn: async () => {
-      return await getSelectedModel(db)
+      return await getSelectedModel()
     },
     initialData: models[0],
   })
@@ -62,7 +62,7 @@ export default function ChatState({ id, models, initialMessages, saveMessages }:
           throw new Error('No init found')
         }
 
-        const model = await getSelectedModel(db)
+        const model = await getSelectedModel()
 
         // All models now use the standard AI SDK flow
         // Flower models will use the custom provider with encryption support

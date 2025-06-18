@@ -19,11 +19,11 @@ export function EmailThreadView() {
       if (!sideviewId) return null
 
       if (sideviewType === 'thread') {
-        return await getEmailThreadByIdWithMessages(db, sideviewId)
+        return await getEmailThreadByIdWithMessages(sideviewId)
       }
 
       if (sideviewType === 'message') {
-        return await getEmailThreadByMessageIdWithMessages(db, sideviewId)
+        return await getEmailThreadByMessageIdWithMessages(sideviewId)
       }
 
       return null

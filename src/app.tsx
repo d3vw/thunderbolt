@@ -78,10 +78,10 @@ const init = async (): Promise<InitData> => {
 
   await migrate(db)
 
-  await seedAccounts(db)
-  await seedModels(db)
-  await seedSettings(db)
-  await seedMcpServers(db)
+  await seedAccounts()
+  await seedModels()
+  await seedSettings()
+  await seedMcpServers()
 
   const imap = new ImapClient()
   const imapSync = new ImapSyncClient()
@@ -120,7 +120,7 @@ const init = async (): Promise<InitData> => {
     }
   }
 
-  const initialThreadId = await getOrCreateChatThread(db)
+  const initialThreadId = await getOrCreateChatThread()
 
   return {
     imap,

@@ -1,11 +1,12 @@
 import { getDefaultCloudUrl } from '@/lib/config'
 import { desc, eq, notExists } from 'drizzle-orm'
 import { v7 as uuidv7 } from 'uuid'
-import type { AnyDrizzleDatabase } from './db/database-interface'
+import { DatabaseSingleton } from './db/singleton'
 import { accountsTable, chatMessagesTable, chatThreadsTable, emailMessagesTable, emailThreadsTable, mcpServersTable, modelsTable, settingsTable } from './db/tables'
 import { EmailThreadWithMessagesAndAddresses, type Model } from './types'
 
-export const seedAccounts = async (db: AnyDrizzleDatabase) => {
+export const seedAccounts = async () => {
+  const db = DatabaseSingleton.instance.db
   await db.select().from(accountsTable)
   // if (accounts.length === 0) {
   //   await db.insert(accountsTable).values({
@@ -19,7 +20,8 @@ export const seedAccounts = async (db: AnyDrizzleDatabase) => {
   // }
 }
 
-export const seedModels = async (db: AnyDrizzleDatabase) => {
+export const seedModels = async () => {
+  const db = DatabaseSingleton.instance.db
   const models = await db.select().from(modelsTable)
   if (models.length === 0) {
     const seedData = [
@@ -86,7 +88,8 @@ export const seedModels = async (db: AnyDrizzleDatabase) => {
   }
 }
 
-export const seedSettings = async (db: AnyDrizzleDatabase) => {
+export const seedSettings = async () => {
+  const db = DatabaseSingleton.instance.db
   await db
     .insert(settingsTable)
     .values({
@@ -104,7 +107,8 @@ export const seedSettings = async (db: AnyDrizzleDatabase) => {
     .onConflictDoNothing()
 }
 
-export const seedMcpServers = async (db: AnyDrizzleDatabase) => {
+export const seedMcpServers = async () => {
+  const db = DatabaseSingleton.instance.db
   const existingServers = await db.select().from(mcpServersTable).limit(1)
 
   if (existingServers.length === 0) {
@@ -119,11 +123,11 @@ export const seedMcpServers = async (db: AnyDrizzleDatabase) => {
 }
 /**
  * Gets the currently selected model or falls back to the system default model
- * @param db Database instance
  * @returns The selected model or system default model
  * @throws Error if no system model is found
  */
-export const getSelectedModel = async (db: AnyDrizzleDatabase): Promise<Model> => {
+export const getSelectedModel = async (): Promise<Model> => {
+  const db = DatabaseSingleton.instance.db
   const model = await db
     .select()
     .from(modelsTable)
@@ -147,7 +151,8 @@ export const getSelectedModel = async (db: AnyDrizzleDatabase): Promise<Model> =
  * Gets an existing empty chat thread or creates a new one
  * @returns The ID of the chat thread to use
  */
-export const getOrCreateChatThread = async (db: AnyDrizzleDatabase, isEncrypted: boolean = false): Promise<string> => {
+export const getOrCreateChatThread = async (isEncrypted: boolean = false): Promise<string> => {
+  const db = DatabaseSingleton.instance.db
   // First check if any threads exist
   const threads = await db.select().from(chatThreadsTable).orderBy(desc(chatThreadsTable.id))
 
@@ -176,7 +181,8 @@ export const getOrCreateChatThread = async (db: AnyDrizzleDatabase, isEncrypted:
   return chatThreadId
 }
 
-export const getEmailThreadByIdWithMessages = async (db: AnyDrizzleDatabase, emailThreadId: string): Promise<EmailThreadWithMessagesAndAddresses | null> => {
+export const getEmailThreadByIdWithMessages = async (emailThreadId: string): Promise<EmailThreadWithMessagesAndAddresses | null> => {
+  const db = DatabaseSingleton.instance.db
   const thread = await db.select().from(emailThreadsTable).where(eq(emailThreadsTable.id, emailThreadId)).get()
 
   if (!thread) return null
@@ -196,7 +202,8 @@ export const getEmailThreadByIdWithMessages = async (db: AnyDrizzleDatabase, ema
   return { ...thread, messages }
 }
 
-export const getEmailThreadByMessageImapIdWithMessages = async (db: AnyDrizzleDatabase, imapId: string): Promise<EmailThreadWithMessagesAndAddresses | null> => {
+export const getEmailThreadByMessageImapIdWithMessages = async (imapId: string): Promise<EmailThreadWithMessagesAndAddresses | null> => {
+  const db = DatabaseSingleton.instance.db
   const message = await db.select().from(emailMessagesTable).where(eq(emailMessagesTable.imapId, imapId)).get()
 
   if (!message || !message.emailThreadId) return null
@@ -221,7 +228,8 @@ export const getEmailThreadByMessageImapIdWithMessages = async (db: AnyDrizzleDa
   return { ...thread, messages }
 }
 
-export const getEmailThreadByMessageIdWithMessages = async (db: AnyDrizzleDatabase, emailMessageId: string): Promise<EmailThreadWithMessagesAndAddresses | null> => {
+export const getEmailThreadByMessageIdWithMessages = async (emailMessageId: string): Promise<EmailThreadWithMessagesAndAddresses | null> => {
+  const db = DatabaseSingleton.instance.db
   const message = await db.select().from(emailMessagesTable).where(eq(emailMessagesTable.id, emailMessageId)).get()
 
   if (!message || !message.emailThreadId) return null
