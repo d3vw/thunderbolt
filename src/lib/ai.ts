@@ -266,6 +266,24 @@ export const aiFetchStreamingResponse = async ({
       // continueUntil: hasToolCall('answer'),
       // continueUntil: maxSteps(5),
       maxSteps: 10,
+      providerOptions:
+        // OpenAI’s *Structured Outputs* mode rejects any tool schema that
+        // contains properties not listed in `required` (i.e. “optional” fields).
+        // Many MCP servers rely on those optional fields, so we disable
+        // Structured Outputs here. This falls back to legacy function-calling,
+        // which accepts optional parameters but no longer guarantees strictly
+        // valid JSON responses.
+        //
+        // See: https://github.com/vercel/ai/issues/6776  // main error thread
+        //      https://github.com/vercel/ai/issues/2792  // same root cause
+        //      https://github.com/vercel/ai/issues/2573
+        modelConfig.provider === 'openai'
+          ? {
+              openai: {
+                structuredOutputs: false,
+              },
+            }
+          : undefined,
     })
 
     return result.toUIMessageStreamResponse({
