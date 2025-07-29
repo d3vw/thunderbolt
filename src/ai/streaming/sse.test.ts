@@ -5,8 +5,8 @@ import { MockLanguageModelV2 } from 'ai/test'
 import { describe, expect, it } from 'bun:test'
 import fs from 'fs'
 import { join } from 'path'
-import { defaultMiddleware } from '../middleware/default'
-import { createSimulatedFetch, createUIMessageTransform, parseSseLog, streamTextToUIMessage } from './util'
+import { createDefaultMiddleware } from '../middleware/default'
+import { createSimulatedFetch, normalizeStepResult, parseSseLog } from './util'
 
 describe('sse', async () => {
   it('simulateReadableStream', async () => {
@@ -14,8 +14,8 @@ describe('sse', async () => {
       model: new MockLanguageModelV2({
         doStream: async () => ({
           stream: simulateReadableStream<LanguageModelV2StreamPart>({
-            initialDelayInMs: 1000, // Delay before the first chunk
-            chunkDelayInMs: 300, // Delay between chunks
+            initialDelayInMs: 0, // Delay before the first chunk
+            chunkDelayInMs: 0, // Delay between chunks
             chunks: [
               {
                 type: 'reasoning',
@@ -41,23 +41,6 @@ describe('sse', async () => {
       prompt: '<test>',
     })
 
-    const message = await streamTextToUIMessage(result)
-
-    expect(message).toEqual({
-      id: 'sim',
-      role: 'assistant',
-      parts: [
-        {
-          type: 'reasoning',
-          text: "\nOkay, the user said \"hi\". I need to respond appropriately. Since they didn't ask a question or request anything specific, I should greet them back and offer assistance. Let me check if there's any tool I need to use here. They didn't mention anything that requires a tool, so a simple response should suffice. I'll make sure to keep it friendly and open-ended.\n\nMaybe add an emoji to keep it approachable. Let me structure it with a subheader and some bullet points for clarity. Wait, the user might be looking for help with something, so I should prompt them to ask questions. Also, remember to ask for their location if they need location-based help. But since they haven't asked for anything like that yet, maybe just a general offer to assist. Alright, let's put it all together.\n",
-        },
-        {
-          type: 'text',
-          text: "Hello! 👋 How can I assist you today? Whether you have questions, need help with planning, or just want to chat, I'm here for you! Let me know how I can be helpful. 🌟  \n\n**Need help with:**  \n- Finding information?  \n- Scheduling or reminders?  \n- General advice or ideas?  \n\nJust ask! 😊",
-        },
-      ],
-    })
-
     // Example of howto iterate over stream chunks
     // for await (const _chunk of result.fullStream) {
     //   // console.log('chunk', chunk)
@@ -66,6 +49,13 @@ describe('sse', async () => {
     // Example of how to consume the stream (to force it to finish)
     // await result.consumeStream()
     // console.log('steps',await result.steps)
+
+    await result.consumeStream()
+
+    const steps = await result.steps
+    const normalizedSteps = steps.map(normalizeStepResult)
+
+    expect(normalizedSteps).toMatchSnapshot()
   })
 })
 
@@ -87,7 +77,7 @@ describe('sse', async () => {
 
   const wrappedModel = wrapLanguageModel({
     model,
-    middleware: defaultMiddleware,
+    middleware: createDefaultMiddleware(),
   })
 
   it('should return a readable stream', async () => {
@@ -96,9 +86,7 @@ describe('sse', async () => {
       prompt: 'Hello, test!',
     })
 
-    // Transform the raw chunk stream into UIMessage snapshots
-    const messageStream = result.fullStream.pipeThrough(createUIMessageTransform())
-    const reader = messageStream.getReader()
+    const reader = result.fullStream.getReader()
 
     let finalMessage
     let count = 0
@@ -108,43 +96,31 @@ describe('sse', async () => {
         if (done) break
         finalMessage = value
         count++
-        // console.log('UIMessage Streaming Snapshot:', JSON.stringify(value, null, 2))
       }
     } finally {
       reader.releaseLock()
     }
 
     expect(count).toBe(74)
-
-    expect(finalMessage).toEqual({
-      id: 'sim',
-      role: 'assistant',
-      parts: [
-        {
-          type: 'text',
-          text: "Hello! 👋 How can I assist you today? Whether you have questions, need help with planning, or just want to chat, I'm here for you! Let me know how I can be helpful. 🌟  \n\n**Need help with:**  \n- Finding information?  \n- Scheduling or reminders?  \n- General advice or ideas?  \n\nJust ask! 😊",
-        },
-      ],
-    })
+    expect(finalMessage).toMatchSnapshot()
   })
 
-  it('streamTextToUIMessage', async () => {
-    const result = streamText({
-      model: wrappedModel,
-      prompt: '<test>',
-    })
+  it('should produce identical results when running the same SSE log multiple times', async () => {
+    const results = []
 
-    const message = await streamTextToUIMessage(result)
+    for (let i = 0; i < 2; i++) {
+      const chunks = parseSseLog(fs.readFileSync(join(__dirname, 'sse-logs/apple.sse'), 'utf8'))
+      const simulatedFetch = createSimulatedFetch(chunks, { initialDelayInMs: 0, chunkDelayInMs: 0 })
+      const provider = createOpenAICompatible({ name: 'test', baseURL: 'http://localhost:8000', fetch: simulatedFetch })
+      const model = provider('test-model')
+      const wrappedModel = wrapLanguageModel({ model, middleware: createDefaultMiddleware() })
+      const result = streamText({ model: wrappedModel, prompt: 'test' })
+      await result.consumeStream()
+      results.push(await result.steps)
+    }
 
-    expect(message).toEqual({
-      id: 'sim',
-      role: 'assistant',
-      parts: [
-        {
-          type: 'text',
-          text: "Hello! 👋 How can I assist you today? Whether you have questions, need help with planning, or just want to chat, I'm here for you! Let me know how I can be helpful. 🌟  \n\n**Need help with:**  \n- Finding information?  \n- Scheduling or reminders?  \n- General advice or ideas?  \n\nJust ask! 😊",
-        },
-      ],
-    })
+    for (let i = 1; i < results.length; i++) {
+      expect(results[i]).toEqual(results[0])
+    }
   })
 })

@@ -1,4 +1,4 @@
-import { createSimulatedFetch, createUIMessageTransform, parseSseLog } from '@/ai/streaming/util'
+import { createMockToolSet, createSimulatedFetch, parseSseLog } from '@/ai/streaming/util'
 import { AssistantMessage } from '@/components/chat/assistant-message'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -6,18 +6,22 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Textarea } from '@/components/ui/textarea'
 import { useLocalStorage } from '@/hooks/use-local-storage'
+import { getOrCreateChatStore } from '@/lib/chat-store-registry'
 import { cn } from '@/lib/utils'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import type { ReasoningUIPart, TextUIPart, ToolInvocationUIPart, UIMessage } from 'ai'
+import { useChat } from '@ai-sdk/react'
 import { streamText, wrapLanguageModel } from 'ai'
 import { Check, ChevronsUpDown, Play, RotateCcw, Square } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { v7 as uuidv7 } from 'uuid'
 
-import { defaultMiddleware } from '@/ai/middleware/default'
+import { createDefaultMiddleware } from '@/ai/middleware/default'
 import APPLE_SSE_CONTENT from '../ai/streaming/sse-logs/apple.sse?raw'
 import BANANA_SSE_CONTENT from '../ai/streaming/sse-logs/banana.sse?raw'
 import COMPUTER_1_SSE_CONTENT from '../ai/streaming/sse-logs/computer-1.sse?raw'
 import COMPUTER_2_SSE_CONTENT from '../ai/streaming/sse-logs/computer-2.sse?raw'
+import GET_TASKS_1_SSE_CONTENT from '../ai/streaming/sse-logs/get-tasks-1.sse?raw'
+import GET_TASKS_2_SSE_CONTENT from '../ai/streaming/sse-logs/get-tasks-2.sse?raw'
 
 // Map of SSE log files to their content
 const SSE_LOG_FILES = {
@@ -25,6 +29,8 @@ const SSE_LOG_FILES = {
   banana: BANANA_SSE_CONTENT,
   'computer-1': COMPUTER_1_SSE_CONTENT,
   'computer-2': COMPUTER_2_SSE_CONTENT,
+  'get-tasks-1': GET_TASKS_1_SSE_CONTENT,
+  'get-tasks-2': GET_TASKS_2_SSE_CONTENT,
 } as const
 
 // Generate SSE logs array from file names
@@ -34,101 +40,217 @@ const SSE_LOGS = Object.entries(SSE_LOG_FILES).map(([fileName, content]) => ({
   content,
 }))
 
-interface SimulatorContentProps {}
+type SimulatorChatProps = {
+  sseLog: string
+  onStop: () => void
+  stopRef: React.MutableRefObject<(() => void) | null>
+}
+
+function SimulatorChat({ sseLog, onStop, stopRef }: SimulatorChatProps) {
+  // Generate stable IDs only once when component mounts
+  const [chatId] = useState(() => `simulation-${uuidv7()}`)
+
+  // Create a custom fetch function that simulates the SSE response
+  const customFetch = useCallback(
+    Object.assign(
+      async (_requestInfo: RequestInfo | URL, init?: RequestInit) => {
+        if (!sseLog.trim()) {
+          throw new Error('No SSE log content')
+        }
+
+        // Create a mock fetch that returns the SSE log
+        const chunks = parseSseLog(sseLog)
+        const simulatedFetch = createSimulatedFetch(chunks, {
+          initialDelayInMs: 200,
+          chunkDelayInMs: 20,
+        })
+
+        // Simulate the real AI fetch by creating a streamText result
+        const provider = createOpenAICompatible({
+          name: 'test-provider',
+          baseURL: 'http://localhost:8000',
+          fetch: simulatedFetch,
+        })
+
+        const baseModel = provider('test-model')
+        const wrappedModel = wrapLanguageModel({
+          model: baseModel,
+          middleware: createDefaultMiddleware(),
+        })
+
+        const result = streamText({
+          model: wrappedModel,
+          prompt: 'Simulated prompt',
+          abortSignal: init?.signal || undefined,
+          onChunk: (chunk) => {
+            console.log('onChunk', chunk)
+          },
+          onError: (error) => {
+            console.error('streamText error:', error)
+          },
+          onFinish: (message) => {
+            console.log('onFinish', message)
+          },
+          onStepFinish: (step) => {
+            console.log('onStepFinish', step)
+          },
+          tools: createMockToolSet(),
+        })
+
+        // Return the UI message stream response like the real API does
+        return result.toUIMessageStreamResponse({
+          sendReasoning: true,
+          messageMetadata: () => ({ modelId: 'simulator' }),
+        })
+      },
+      {
+        preconnect: () => Promise.resolve(false),
+      },
+    ),
+    [sseLog],
+  )
+
+  const chatStoreInstance = getOrCreateChatStore(chatId, {
+    initialMessages: [],
+    fetch: customFetch,
+  })
+
+  const chatHelpers = useChat({
+    id: chatId,
+    chatStore: chatStoreInstance,
+    generateId: uuidv7,
+    onError: (error) => {
+      console.error('Simulation error:', error)
+    },
+  })
+
+  const { messages, status, stop } = chatHelpers
+  const isLoading = status === 'streaming'
+
+  // Auto-start simulation when component mounts
+  useEffect(() => {
+    const startSimulation = async () => {
+      await chatHelpers.append({
+        role: 'user',
+        parts: [{ type: 'text', text: '<prompt>' }],
+      })
+    }
+    startSimulation()
+  }, [])
+
+  // Call onStop when simulation finishes naturally
+  useEffect(() => {
+    console.log('Status changed:', status, 'Messages:', messages.length, 'IsLoading:', isLoading)
+    if ((status === 'ready' || status === 'error') && messages.length > 0 && !isLoading) {
+      // Simulation has finished
+      console.log('Simulation finished, calling onStop')
+      onStop()
+    }
+  }, [status, messages.length, isLoading, onStop])
+
+  // Call onStop when user stops manually
+  const handleStop = () => {
+    stop()
+    onStop()
+  }
+
+  // Expose the stop function to parent via ref
+  useEffect(() => {
+    stopRef.current = handleStop
+    return () => {
+      stopRef.current = null
+    }
+  }, [stopRef])
+
+  return (
+    <>
+      {/* Bottom Grid: Chat Output and JSON Debug */}
+      {messages.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Simulated Chat Output */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Simulated Chat Output</CardTitle>
+              <CardDescription>This shows the UIMessage as it's being built from the SSE log.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="border rounded-md p-4">
+                {messages
+                  .filter((msg) => msg.role === 'assistant')
+                  .map((message) => (
+                    <AssistantMessage
+                      key={message.id}
+                      message={message as any}
+                      isStreaming={isLoading && messages[messages.length - 1]?.id === message.id}
+                    />
+                  ))}
+                {messages.filter((msg) => msg.role === 'assistant').length === 0 && (
+                  <div className="text-muted-foreground">No assistant response yet...</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Real-time JSON Debug */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Parsed Message (Real-time)</CardTitle>
+              <CardDescription>JSON structure updates in real-time as the SSE log is processed.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <pre className="p-3 bg-muted rounded text-xs whitespace-pre-wrap word-break-all min-h-[200px] max-h-[400px] overflow-y-auto">
+                {messages.length > 0
+                  ? JSON.stringify(
+                      messages.filter((msg) => msg.role === 'assistant'),
+                      null,
+                      2,
+                    )
+                  : 'No message data yet...'}
+              </pre>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </>
+  )
+}
+
+type SimulatorContentProps = Record<string, never>
 
 function SimulatorContent({}: SimulatorContentProps) {
-  const [selectedSse, setSelectedSse] = useLocalStorage('message-simulator-sse', '')
+  const [selectedSse, setSelectedSse] = useLocalStorage('simulation-sse', '')
   const [sseLog, setSseLog] = useState(() => {
     const selectedLog = SSE_LOGS.find((log) => log.value === selectedSse)
     return selectedLog?.content || ''
   })
-  const [isSimulating, setIsSimulating] = useState(false)
-  const [isStreaming, setIsStreaming] = useState(false)
-  const [realtimeMessage, setRealtimeMessage] = useState<UIMessage<
-    ReasoningUIPart | ToolInvocationUIPart | TextUIPart,
-    { finishReason: string; messageId: string }
-  > | null>(null)
   const [open, setOpen] = useState(false)
-  const abortControllerRef = useRef<AbortController | null>(null)
+  const [simulationKey, setSimulationKey] = useState<number | null>(null)
+  const [isRunning, setIsRunning] = useState(false)
+  const stopFunctionRef = useRef<(() => void) | null>(null)
 
-  const startSimulation = async () => {
+  const startSimulation = () => {
     if (!sseLog.trim()) return
-
-    // Reset previous simulation
-    setRealtimeMessage(null)
-    setIsSimulating(true)
-    setIsStreaming(true)
-
-    // Create abort controller for cancellation
-    abortControllerRef.current = new AbortController()
-    const signal = abortControllerRef.current.signal
-
-    try {
-      // Create a mock fetch that returns the SSE log
-      const chunks = parseSseLog(sseLog)
-      const simulatedFetch = createSimulatedFetch(chunks, {
-        initialDelayInMs: 200,
-        chunkDelayInMs: 20,
-      })
-
-      // Initialize a custom OpenAI-compatible provider pointing to a mock URL
-      const provider = createOpenAICompatible({
-        name: 'test-provide',
-        baseURL: 'http://localhost:8000',
-        fetch: simulatedFetch,
-      })
-
-      // Get a model instance (model id is irrelevant, only used for labeling)
-      const baseModel = provider('test-model')
-
-      // Attach only the reasoning extraction middleware (tagName: think)
-      const wrappedModel = wrapLanguageModel({
-        model: baseModel,
-        middleware: defaultMiddleware,
-      })
-
-      // Call the Vercel AI SDK streamText helper which gives us a StreamTextResult-like object
-      const result = await streamText({
-        model: wrappedModel,
-        prompt: 'Simulated prompt', // Minimal prompt just to satisfy the SDK API
-        abortSignal: signal,
-      })
-
-      // -------------------------------------------------------------------
-      // Transform the raw chunk stream into UIMessage snapshots using a
-      // standard TransformStream, then consume each UIMessage update
-      // -------------------------------------------------------------------
-      const messageStream = result.fullStream.pipeThrough(createUIMessageTransform())
-      const reader = messageStream.getReader()
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          setRealtimeMessage(value as any) // Cast to bypass TypeScript generics mismatch
-        }
-      } finally {
-        reader.releaseLock()
-      }
-    } catch (error) {
-      console.error('Simulation error:', error)
-    } finally {
-      setIsSimulating(false)
-      setIsStreaming(false)
-    }
+    // Create a new simulation key to force re-mount of SimulatorChat
+    setSimulationKey(Date.now())
+    setIsRunning(true)
   }
 
   const stopSimulation = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
+    // Try to call the child's stop function first, then set state
+    if (stopFunctionRef.current) {
+      stopFunctionRef.current()
     }
-    setIsSimulating(false)
-    setIsStreaming(false)
+    setIsRunning(false)
+  }
+
+  const onSimulationFinished = () => {
+    // Called when simulation finishes naturally - just update button state
+    setIsRunning(false)
   }
 
   const resetSimulation = () => {
-    stopSimulation()
-    setRealtimeMessage(null)
+    setSimulationKey(null)
+    setIsRunning(false)
     setSseLog('')
     setSelectedSse('')
   }
@@ -170,7 +292,7 @@ function SimulatorContent({}: SimulatorContentProps) {
                       role="combobox"
                       aria-expanded={open}
                       className="w-[300px] justify-between"
-                      disabled={isSimulating}
+                      disabled={isRunning}
                     >
                       {selectedSse ? SSE_LOGS.find((log) => log.value === selectedSse)?.label : 'Select SSE log...'}
                       <ChevronsUpDown className="opacity-50" />
@@ -202,31 +324,33 @@ function SimulatorContent({}: SimulatorContentProps) {
                 value={sseLog}
                 onChange={(e) => setSseLog(e.target.value)}
                 className="min-h-[200px] font-mono text-xs"
-                disabled={isSimulating}
+                disabled={isRunning}
               />
 
               <div className="flex gap-2">
                 <Button
-                  onClick={startSimulation}
-                  disabled={isSimulating || !sseLog.trim()}
+                  onClick={isRunning ? stopSimulation : startSimulation}
+                  disabled={!sseLog.trim()}
                   className="flex items-center gap-2"
                 >
-                  <Play size={16} />
-                  {isSimulating ? 'Running...' : 'Run'}
+                  {isRunning ? (
+                    <>
+                      <Square size={16} />
+                      Stop
+                    </>
+                  ) : (
+                    <>
+                      <Play size={16} />
+                      Run
+                    </>
+                  )}
                 </Button>
-
-                {isSimulating && (
-                  <Button onClick={stopSimulation} variant="destructive" className="flex items-center gap-2">
-                    <Square size={16} />
-                    Stop
-                  </Button>
-                )}
 
                 <Button
                   onClick={resetSimulation}
                   variant="outline"
                   className="flex items-center gap-2"
-                  disabled={isSimulating}
+                  disabled={isRunning}
                 >
                   <RotateCcw size={16} />
                   Clear
@@ -235,36 +359,14 @@ function SimulatorContent({}: SimulatorContentProps) {
             </CardContent>
           </Card>
 
-          {/* Bottom Grid: Chat Output and JSON Debug */}
-          {realtimeMessage && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Simulated Chat Output */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Simulated Chat Output</CardTitle>
-                  <CardDescription>This shows the UIMessage as it's being built from the SSE log.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="border rounded-md p-4">
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <AssistantMessage message={realtimeMessage as any} isStreaming={isStreaming} />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Real-time JSON Debug */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Parsed Message (Real-time)</CardTitle>
-                  <CardDescription>JSON structure updates in real-time as the SSE log is processed.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <pre className="p-3 bg-muted rounded text-xs whitespace-pre-wrap word-break-all min-h-[200px] max-h-[400px] overflow-y-auto">
-                    {realtimeMessage ? JSON.stringify(realtimeMessage, null, 2) : 'No message data yet...'}
-                  </pre>
-                </CardContent>
-              </Card>
-            </div>
+          {/* Simulation Output */}
+          {simulationKey && (
+            <SimulatorChat
+              key={simulationKey}
+              sseLog={sseLog}
+              onStop={onSimulationFinished}
+              stopRef={stopFunctionRef}
+            />
           )}
         </div>
       </div>
