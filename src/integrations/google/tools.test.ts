@@ -5,8 +5,10 @@ import type {
   DraftEmailParams,
   GetEmailParams,
   SearchEmailsParams,
+  SearchDriveParams,
+  GetDriveFileContentParams,
 } from './tools'
-import { checkCalendar, checkInbox, draftEmail, getEmail, searchEmails } from './tools'
+import { checkCalendar, checkInbox, draftEmail, getEmail, searchEmails, searchDrive, getDriveFileContent } from './tools'
 
 // Custom error type for HTTP error mocking
 interface HTTPError extends Error {
@@ -36,7 +38,7 @@ mock.module('ky', () => ({
 }))
 
 // Mock utils
-mock.module('../utils', () => ({
+mock.module('./utils', () => ({
   getGoogleCredentials: mockGetGoogleCredentials,
   ensureValidGoogleToken: mockEnsureValidGoogleToken,
   getHeader: mockGetHeader,
@@ -625,6 +627,444 @@ describe('Google Tools', () => {
       })
 
       await expect(checkCalendar(params)).rejects.toThrow('Server Error')
+    })
+  })
+
+  describe('searchDrive', () => {
+    it('should search drive files with query', async () => {
+      const params: SearchDriveParams = {
+        query: 'type:pdf',
+        max_results: 10,
+        include_trashed: false,
+      }
+
+      const mockDriveResponse = {
+        files: [
+          {
+            id: 'file1',
+            name: 'document.pdf',
+            mimeType: 'application/pdf',
+            size: '1024000',
+            createdTime: '2024-01-01T10:00:00Z',
+            modifiedTime: '2024-01-01T11:00:00Z',
+            webViewLink: 'https://drive.google.com/file/d/file1/view',
+            webContentLink: 'https://drive.google.com/uc?id=file1',
+            parents: ['folder1'],
+            description: 'A sample PDF document',
+            shared: true,
+            ownedByMe: true,
+          },
+          {
+            id: 'folder1',
+            name: 'Documents',
+            mimeType: 'application/vnd.google-apps.folder',
+            createdTime: '2024-01-01T09:00:00Z',
+            modifiedTime: '2024-01-01T12:00:00Z',
+            webViewLink: 'https://drive.google.com/drive/folders/folder1',
+            parents: ['root'],
+            shared: false,
+            ownedByMe: true,
+          },
+        ],
+        nextPageToken: null,
+      }
+
+      mockJson.mockResolvedValue(mockDriveResponse)
+      mockTruncateText.mockReturnValue('A sample PDF document')
+
+      const result = await searchDrive(params)
+
+      expect(result.files).toHaveLength(2)
+      expect(result.total_count).toBe(2)
+      expect(result.has_more).toBe(false)
+
+      expect(result.files[0]).toMatchObject({
+        id: 'file1',
+        name: 'document.pdf',
+        mime_type: 'application/pdf',
+        size_bytes: 1024000,
+        created_time: '2024-01-01T10:00:00Z',
+        modified_time: '2024-01-01T11:00:00Z',
+        web_view_link: 'https://drive.google.com/file/d/file1/view',
+        web_content_link: 'https://drive.google.com/uc?id=file1',
+        is_folder: false,
+        shared: true,
+        owned_by_me: true,
+        parent_folders: ['folder1'],
+        description: 'A sample PDF document',
+      })
+
+      expect(result.files[1]).toMatchObject({
+        id: 'folder1',
+        name: 'Documents',
+        mime_type: 'application/vnd.google-apps.folder',
+        is_folder: true,
+        shared: false,
+        owned_by_me: true,
+      })
+
+      expect(mockGet).toHaveBeenCalledWith(
+        'https://www.googleapis.com/drive/v3/files',
+        expect.objectContaining({
+          searchParams: expect.any(URLSearchParams),
+          headers: { Authorization: 'Bearer test-access-token' },
+        }),
+      )
+
+      // Verify the search query includes trashed=false
+      const call = mockGet.mock.calls[0]
+      const searchParams = call[1].searchParams
+      expect(searchParams.get('q')).toBe('type:pdf and trashed=false')
+    })
+
+    it('should handle empty search results', async () => {
+      const params: SearchDriveParams = {
+        query: 'name:nonexistent',
+        max_results: 20,
+        include_trashed: false,
+      }
+
+      mockJson.mockResolvedValue({ files: [] })
+
+      const result = await searchDrive(params)
+
+      expect(result.files).toHaveLength(0)
+      expect(result.total_count).toBe(0)
+      expect(result.has_more).toBe(false)
+    })
+
+    it('should include trashed files when requested', async () => {
+      const params: SearchDriveParams = {
+        query: 'name:test',
+        max_results: 20,
+        include_trashed: true,
+      }
+
+      mockJson.mockResolvedValue({ files: [] })
+
+      await searchDrive(params)
+
+      // Verify that trashed=false is NOT added to the query
+      const call = mockGet.mock.calls[0]
+      const searchParams = call[1].searchParams
+      expect(searchParams.get('q')).toBe('name:test')
+    })
+
+    it('should handle files without optional properties', async () => {
+      const params: SearchDriveParams = {
+        query: 'type:document',
+        max_results: 10,
+        include_trashed: false,
+      }
+
+      const mockDriveResponse = {
+        files: [
+          {
+            id: 'file2',
+            name: 'untitled',
+            mimeType: 'application/vnd.google-apps.document',
+            createdTime: '2024-01-01T10:00:00Z',
+            modifiedTime: '2024-01-01T11:00:00Z',
+            webViewLink: 'https://docs.google.com/document/d/file2/edit',
+            // Missing: size, webContentLink, parents, description, shared, ownedByMe
+          },
+        ],
+      }
+
+      mockJson.mockResolvedValue(mockDriveResponse)
+
+      const result = await searchDrive(params)
+
+      expect(result.files).toHaveLength(1)
+      expect(result.files[0]).toMatchObject({
+        id: 'file2',
+        name: 'untitled',
+        mime_type: 'application/vnd.google-apps.document',
+        size_bytes: undefined,
+        web_content_link: undefined,
+        is_folder: false,
+        shared: false,
+        owned_by_me: true, // Default to true
+        parent_folders: [],
+        description: undefined,
+      })
+    })
+
+    it('should handle pagination with nextPageToken', async () => {
+      const params: SearchDriveParams = {
+        query: 'type:image',
+        max_results: 5,
+        include_trashed: false,
+      }
+
+      const mockDriveResponse = {
+        files: [
+          {
+            id: 'image1',
+            name: 'photo.jpg',
+            mimeType: 'image/jpeg',
+            createdTime: '2024-01-01T10:00:00Z',
+            modifiedTime: '2024-01-01T11:00:00Z',
+            webViewLink: 'https://drive.google.com/file/d/image1/view',
+          },
+        ],
+        nextPageToken: 'next_page_token_123',
+      }
+
+      mockJson.mockResolvedValue(mockDriveResponse)
+
+      const result = await searchDrive(params)
+
+      expect(result.files).toHaveLength(1)
+      expect(result.has_more).toBe(true)
+    })
+
+    it('should handle drive access error', async () => {
+      const params: SearchDriveParams = {
+        query: 'type:pdf',
+        max_results: 20,
+        include_trashed: false,
+      }
+
+      const mockError = new Error('Forbidden') as HTTPError
+      mockError.response = { status: 403 }
+      mockGet.mockImplementation(() => {
+        throw mockError
+      })
+
+      const result = await searchDrive(params)
+
+      expect(result.files).toHaveLength(0)
+      expect(result.total_count).toBe(0)
+      expect(result.has_more).toBe(false)
+      expect(result.error).toContain('Google Drive access not available')
+    })
+
+    it('should propagate other drive errors', async () => {
+      const params: SearchDriveParams = {
+        query: 'type:pdf',
+        max_results: 20,
+        include_trashed: false,
+      }
+
+      const mockError = new Error('Server Error') as HTTPError
+      mockError.response = { status: 500 }
+      mockGet.mockImplementation(() => {
+        throw mockError
+      })
+
+      await expect(searchDrive(params)).rejects.toThrow('Server Error')
+    })
+
+    it('should handle empty query by searching all non-trashed files', async () => {
+      const params: SearchDriveParams = {
+        query: '',
+        max_results: 10,
+        include_trashed: false,
+      }
+
+      mockJson.mockResolvedValue({ files: [] })
+
+      await searchDrive(params)
+
+      const call = mockGet.mock.calls[0]
+      const searchParams = call[1].searchParams
+      expect(searchParams.get('q')).toBe('trashed=false')
+    })
+
+    it('should respect max_results limit', async () => {
+      const params: SearchDriveParams = {
+        query: 'type:pdf',
+        max_results: 100, // Above the 50 limit
+        include_trashed: false,
+      }
+
+      mockJson.mockResolvedValue({ files: [] })
+
+      await searchDrive(params)
+
+      const call = mockGet.mock.calls[0]
+      const searchParams = call[1].searchParams
+      expect(searchParams.get('pageSize')).toBe('50') // Should be clamped to 50
+    })
+
+    it('should handle network errors', async () => {
+      const params: SearchDriveParams = {
+        query: 'type:pdf',
+        max_results: 20,
+        include_trashed: false,
+      }
+
+      const networkError = new Error('Network error')
+      mockGet.mockImplementation(() => {
+        throw networkError
+      })
+
+      await expect(searchDrive(params)).rejects.toThrow('Network error')
+    })
+
+    it('should handle authentication errors', async () => {
+      const params: SearchDriveParams = {
+        query: 'type:pdf',
+        max_results: 20,
+        include_trashed: false,
+      }
+
+      const authError = new Error('Authentication failed')
+      mockEnsureValidGoogleToken.mockRejectedValue(authError)
+
+      await expect(searchDrive(params)).rejects.toThrow('Authentication failed')
+    })
+  })
+
+  describe('getDriveFileContent', () => {
+    it('should get content from a Google Doc', async () => {
+      const params: GetDriveFileContentParams = {
+        file_id: 'doc123',
+      }
+
+      const mockFileResponse = {
+        id: 'doc123',
+        name: 'My Document.docx',
+        mimeType: 'application/vnd.google-apps.document',
+      }
+
+      const mockContent = 'This is the content of my Google Doc.\n\nIt has multiple paragraphs.'
+      const mockTextFn = mock().mockResolvedValue(mockContent)
+
+      mockJson.mockResolvedValueOnce(mockFileResponse)
+      mockGet.mockReturnValueOnce({ json: mockJson }).mockReturnValueOnce({ text: mockTextFn })
+
+      const result = await getDriveFileContent(params)
+
+      expect(result).toMatchObject({
+        file_id: 'doc123',
+        file_name: 'My Document.docx',
+        content: mockContent,
+        truncated: false,
+      })
+
+      expect(mockGet).toHaveBeenCalledTimes(2)
+    })
+
+    it('should get content from a text file', async () => {
+      const params: GetDriveFileContentParams = {
+        file_id: 'txt123',
+      }
+
+      const mockFileResponse = {
+        id: 'txt123',
+        name: 'notes.txt',
+        mimeType: 'text/plain',
+      }
+
+      const mockContent = 'These are my notes.\nLine 2 of notes.'
+      const mockTextFn = mock().mockResolvedValue(mockContent)
+
+      mockJson.mockResolvedValueOnce(mockFileResponse)
+      mockGet.mockReturnValueOnce({ json: mockJson }).mockReturnValueOnce({ text: mockTextFn })
+
+      const result = await getDriveFileContent(params)
+
+      expect(result).toMatchObject({
+        file_id: 'txt123',
+        file_name: 'notes.txt',
+        content: mockContent,
+        truncated: false,
+      })
+    })
+
+    it('should handle unsupported file types', async () => {
+      const params: GetDriveFileContentParams = {
+        file_id: 'img123',
+      }
+
+      const mockFileResponse = {
+        id: 'img123',
+        name: 'photo.jpg',
+        mimeType: 'image/jpeg',
+      }
+
+      mockJson.mockResolvedValueOnce(mockFileResponse)
+
+      const result = await getDriveFileContent(params)
+
+      expect(result).toMatchObject({
+        file_id: 'img123',
+        file_name: 'photo.jpg',
+        content: '',
+        truncated: false,
+        error: 'Cannot extract text from image/jpeg. Only Google Docs and text files are supported.',
+      })
+    })
+
+    it('should handle access denied errors', async () => {
+      const params: GetDriveFileContentParams = {
+        file_id: 'private123',
+      }
+
+      const mockError = new Error('Forbidden') as HTTPError
+      mockError.response = { status: 403 }
+      mockGet.mockImplementation(() => {
+        throw mockError
+      })
+
+      const result = await getDriveFileContent(params)
+
+      expect(result).toMatchObject({
+        file_id: 'private123',
+        file_name: 'Unknown',
+        content: '',
+        truncated: false,
+        error: 'Access denied. Make sure you have permission to read this file.',
+      })
+    })
+
+    it('should handle file not found errors', async () => {
+      const params: GetDriveFileContentParams = {
+        file_id: 'missing123',
+      }
+
+      const mockError = new Error('Not Found') as HTTPError
+      mockError.response = { status: 404 }
+      mockGet.mockImplementation(() => {
+        throw mockError
+      })
+
+      const result = await getDriveFileContent(params)
+
+      expect(result).toMatchObject({
+        file_id: 'missing123',
+        file_name: 'Unknown',
+        content: '',
+        truncated: false,
+        error: 'File not found.',
+      })
+    })
+
+    it('should truncate long content', async () => {
+      const params: GetDriveFileContentParams = {
+        file_id: 'long123',
+      }
+
+      const mockFileResponse = {
+        id: 'long123',
+        name: 'long-document.docx',
+        mimeType: 'application/vnd.google-apps.document',
+      }
+
+      // Create a string longer than the 50000 character limit
+      const longContent = 'A'.repeat(60000)
+      const mockTextFn = mock().mockResolvedValue(longContent)
+
+      mockJson.mockResolvedValueOnce(mockFileResponse)
+      mockGet.mockReturnValueOnce({ json: mockJson }).mockReturnValueOnce({ text: mockTextFn })
+      mockTruncateText.mockReturnValue('A'.repeat(50000) + '...[truncated]')
+
+      const result = await getDriveFileContent(params)
+
+      expect(result.truncated).toBe(true)
+      expect(mockTruncateText).toHaveBeenCalledWith(longContent, 50000)
     })
   })
 })
