@@ -92,12 +92,12 @@ const startServer = async () => {
       log.info({
         hostname,
         port: settings.port,
-        url: `http://localhost:${settings.port}`,
+        url: `http://localhost:${settings.port}/v1`,
       }, '🦊 Elysia server started')
 
       if (process.env.NODE_ENV !== 'production') {
         log.info({
-          swaggerUrl: `http://localhost:${settings.port}/swagger`,
+          swaggerUrl: `http://localhost:${settings.port}/v1/swagger`,
         }, '📚 Swagger documentation available')
       }
     })
