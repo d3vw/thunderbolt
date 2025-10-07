@@ -3,7 +3,46 @@
 [![CI](https://github.com/thunderbird/thunderbolt/actions/workflows/ci.yml/badge.svg)](https://github.com/thunderbird/thunderbolt/actions/workflows/ci.yml)
 
 ![Thunderbolt Main Dashboard](./docs/screenshots/main.png)
-![Thunderbolt Chat](./docs/screenshots/chat.png)
+
+## Quick Start
+
+The easiest way to start development:
+
+1. Create a `.env` file with:
+   ```
+   VITE_THUNDERBOLT_CLOUD_URL=https://thunderbolt-cloud.onrender.com
+   ```
+2. Run `bun dev`
+3. Open http://localhost:1420 in your browser
+
+This runs a standard Vite dev server without requiring the Tauri desktop shell or backend setup.
+
+## Architecture Overview
+
+Thunderbolt is a **cross-platform, local-first** app built with [Tauri](https://tauri.app/) and TypeScript. Tauri provides a Rust backend layer that enables native capabilities like file system access and performance-critical operations.
+
+### Local Database Storage
+
+All data is stored on-device. Thunderbolt supports two local SQLite storage options:
+
+- **In-browser** (default): Uses [OPFS](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system) via [SQLocal](https://sqlocal.dev/)
+  - No Rust compilation required
+  - Works in both browser (`bun dev`) and Tauri builds
+  - Run with `bun dev` or `bun tauri dev`
+
+- **Native filesystem**: Uses [libsql](https://github.com/tursodatabase/libsql) (Rust)
+  - **Tauri-only** — requires Rust compilation and desktop app
+  - SQL queries proxied between the Tauri frontend and Rust backend
+  - Database saved as a native file on disk
+  - Run with `bun tauri:libsql`
+  - **Tip**: The console shows the database file path on startup — you can open it in [TablePlus](https://tableplus.com/) to inspect or modify data directly
+
+### Development Modes
+
+- **Browser-only** (`bun dev`): Standard Vite dev server — no Rust features, fast iteration
+- **Tauri desktop** (`bun tauri dev`): Full app with Rust capabilities
+  - Access dev tools with `Cmd+Shift+I` (same as browsers)
+  - All database logic and migrations run in the frontend (local-first architecture)
 
 ## Stack:
 
