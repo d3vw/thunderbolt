@@ -264,17 +264,22 @@ describe('WaSQLiteDatabase', () => {
       expect(finalRows).toHaveLength(2)
     })
 
-    it('should handle rapid sequential operations', async () => {
-      // Test the operation queue by firing many operations quickly
-      for (let i = 1; i <= 50; i++) {
-        await db.db.run(sql`INSERT INTO test (id, name) VALUES (${i}, ${'User' + i})`)
-      }
+    it(
+      'should handle rapid sequential operations',
+      async () => {
+        // Test the operation queue by firing many operations quickly
+        for (let i = 1; i <= 50; i++) {
+          await db.db.run(sql`INSERT INTO test (id, name) VALUES (${i}, ${'User' + i})`)
+        }
 
-      const count = await db.db.all(sql`SELECT COUNT(*) as count FROM test`)
-      const firstRow = count[0] as unknown[] | undefined
-      const countValue = firstRow?.[0] as number | undefined
-      expect(countValue).toBe(50)
-    })
+        const count = await db.db.all(sql`SELECT COUNT(*) as count FROM test`)
+        const firstRow = count[0] as unknown[] | undefined
+        const countValue = firstRow?.[0] as number | undefined
+        expect(countValue).toBe(50)
+      },
+      // CI VMs have slower worker message-passing overhead
+      { timeout: 5000 },
+    )
   })
 
   describe('error handling', () => {
