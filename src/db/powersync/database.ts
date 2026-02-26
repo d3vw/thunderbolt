@@ -1,4 +1,5 @@
 import { getSettings } from '@/dal'
+import { getPlatform } from '@/lib/platform'
 import { defaultSettingCloudUrl } from '@/defaults/settings'
 import type { AbstractPowerSyncDatabase } from '@powersync/common'
 import { PowerSyncDatabase, SyncStreamConnectionMethod } from '@powersync/web'
@@ -109,6 +110,10 @@ export class PowerSyncDatabaseImpl implements DatabaseInterface {
     const options: WebPowerSyncDatabaseOptions = {
       database: { dbFilename },
       schema: AppSchema as unknown as WebPowerSyncDatabaseOptions['schema'],
+      // Disable web workers on iOS: WASM + Web Worker memory causes iOS to kill the
+      // WKWebView WebContent process (~30s after launch), resulting in a black screen.
+      // See: https://github.com/tauri-apps/tauri/issues/14371
+      flags: { useWebWorker: getPlatform() !== 'ios' },
     }
     this.powerSync = new PowerSyncDatabase(options)
 
