@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import type { ModelProfile } from '@/types'
 import {
+  buildStepOverrides,
   extractTextFromMessages,
-  getNudgeMessages,
+  getNudgeMessagesFromProfile,
   hasToolCalls,
   isFinalStep,
   nudgeMessages,
@@ -9,6 +11,33 @@ import {
   shouldRetry,
   shouldShowPreventiveNudge,
 } from './step-logic'
+
+const createStubProfile = (overrides: Partial<ModelProfile> = {}): ModelProfile => ({
+  modelId: 'test-model',
+  temperature: null,
+  maxSteps: null,
+  maxAttempts: null,
+  nudgeThreshold: null,
+  useSystemMessageModeDeveloper: 0,
+  toolsOverride: null,
+  linkPreviewsOverride: null,
+  chatModeAddendum: null,
+  searchModeAddendum: null,
+  researchModeAddendum: null,
+  citationReinforcementEnabled: 0,
+  citationReinforcementPrompt: null,
+  nudgeFinalStep: null,
+  nudgePreventive: null,
+  nudgeRetry: null,
+  nudgeSearchFinalStep: null,
+  nudgeSearchPreventive: null,
+  nudgeSearchRetry: null,
+  providerOptions: null,
+  defaultHash: null,
+  deletedAt: null,
+  userId: null,
+  ...overrides,
+})
 
 describe('isFinalStep', () => {
   test('returns true when on the last step', () => {
@@ -242,18 +271,180 @@ describe('searchModeNudges', () => {
   })
 })
 
-describe('getNudgeMessages', () => {
+describe('getNudgeMessagesFromProfile', () => {
   test('returns default nudges when no mode specified', () => {
-    expect(getNudgeMessages()).toBe(nudgeMessages)
-    expect(getNudgeMessages(undefined)).toBe(nudgeMessages)
+    expect(getNudgeMessagesFromProfile(null)).toBe(nudgeMessages)
+    expect(getNudgeMessagesFromProfile(null, undefined)).toBe(nudgeMessages)
   })
 
   test('returns search nudges for search mode', () => {
-    expect(getNudgeMessages('search')).toBe(searchModeNudges)
+    expect(getNudgeMessagesFromProfile(null, 'search')).toBe(searchModeNudges)
   })
 
   test('returns default nudges for non-search modes', () => {
-    expect(getNudgeMessages('chat')).toBe(nudgeMessages)
-    expect(getNudgeMessages('research')).toBe(nudgeMessages)
+    expect(getNudgeMessagesFromProfile(null, 'chat')).toBe(nudgeMessages)
+    expect(getNudgeMessagesFromProfile(null, 'research')).toBe(nudgeMessages)
+  })
+
+  test('returns profile nudges when all override fields are set', () => {
+    const profile = createStubProfile({
+      nudgeFinalStep: 'custom final',
+      nudgePreventive: 'custom preventive',
+      nudgeRetry: 'custom retry',
+    })
+    const result = getNudgeMessagesFromProfile(profile, 'chat')
+    expect(result.finalStep).toBe('custom final')
+    expect(result.preventive).toBe('custom preventive')
+    expect(result.retry).toBe('custom retry')
+  })
+
+  test('falls back to defaults for null nudge fields in partial override', () => {
+    const profile = createStubProfile({ nudgeFinalStep: 'custom final' })
+    const result = getNudgeMessagesFromProfile(profile, 'chat')
+    expect(result.finalStep).toBe('custom final')
+    expect(result.preventive).toBe(nudgeMessages.preventive)
+    expect(result.retry).toBe(nudgeMessages.retry)
+  })
+
+  test('returns default nudges when profile has no nudge overrides', () => {
+    const profile = createStubProfile()
+    expect(getNudgeMessagesFromProfile(profile, 'chat')).toBe(nudgeMessages)
+  })
+
+  test('returns profile search nudges when search overrides are set', () => {
+    const profile = createStubProfile({
+      nudgeSearchFinalStep: 'search final',
+      nudgeSearchPreventive: 'search preventive',
+      nudgeSearchRetry: 'search retry',
+    })
+    const result = getNudgeMessagesFromProfile(profile, 'search')
+    expect(result.finalStep).toBe('search final')
+    expect(result.preventive).toBe('search preventive')
+    expect(result.retry).toBe('search retry')
+  })
+
+  test('falls back to search defaults for null search nudge fields', () => {
+    const profile = createStubProfile({ nudgeSearchFinalStep: 'search final' })
+    const result = getNudgeMessagesFromProfile(profile, 'search')
+    expect(result.finalStep).toBe('search final')
+    expect(result.preventive).toBe(searchModeNudges.preventive)
+    expect(result.retry).toBe(searchModeNudges.retry)
+  })
+
+  test('returns search mode defaults when profile has no search overrides', () => {
+    const profile = createStubProfile()
+    expect(getNudgeMessagesFromProfile(profile, 'search')).toBe(searchModeNudges)
+  })
+})
+
+describe('buildStepOverrides', () => {
+  const baseParams = {
+    systemPrompt: 'You are an assistant.',
+    profile: null as ModelProfile | null,
+    maxSteps: 20,
+    nudgeThreshold: 6,
+    activeNudges: nudgeMessages,
+  }
+
+  const toolCallSteps = (n: number) => Array(n).fill({ finishReason: 'tool-calls' })
+  const textSteps = (n: number) => Array(n).fill({ finishReason: 'stop' })
+
+  test('returns undefined when no conditions are met', () => {
+    const result = buildStepOverrides({
+      ...baseParams,
+      steps: toolCallSteps(2),
+      messages: [{ role: 'user', content: 'hello' }],
+    })
+    expect(result).toBeUndefined()
+  })
+
+  test('disables tools and nudges on final step', () => {
+    const result = buildStepOverrides({
+      ...baseParams,
+      steps: toolCallSteps(19),
+      messages: [{ role: 'user', content: 'hello' }],
+    })
+    expect(result?.activeTools).toEqual([])
+    expect(result?.messages?.[result.messages.length - 1]?.content).toBe(nudgeMessages.finalStep)
+  })
+
+  test('adds preventive nudge at threshold', () => {
+    const result = buildStepOverrides({
+      ...baseParams,
+      nudgeThreshold: 6,
+      steps: toolCallSteps(6),
+      messages: [{ role: 'user', content: 'hello' }],
+    })
+    expect(result?.messages?.[result.messages.length - 1]?.content).toBe(nudgeMessages.preventive)
+    expect(result?.activeTools).toBeUndefined()
+  })
+
+  test('does not nudge below threshold', () => {
+    const result = buildStepOverrides({
+      ...baseParams,
+      steps: toolCallSteps(5),
+      messages: [{ role: 'user', content: 'hello' }],
+    })
+    expect(result).toBeUndefined()
+  })
+
+  test('final step takes priority over preventive nudge', () => {
+    const result = buildStepOverrides({
+      ...baseParams,
+      maxSteps: 7,
+      nudgeThreshold: 6,
+      steps: toolCallSteps(6),
+      messages: [{ role: 'user', content: 'hello' }],
+    })
+    expect(result?.activeTools).toEqual([])
+  })
+
+  test('appends citation reinforcement when enabled and tool calls occurred', () => {
+    const profile = createStubProfile({
+      citationReinforcementEnabled: 1,
+      citationReinforcementPrompt: '\n<cite>sources</cite>',
+    })
+    const result = buildStepOverrides({
+      ...baseParams,
+      profile,
+      steps: toolCallSteps(2),
+      messages: [{ role: 'user', content: 'hello' }],
+    })
+    expect(result?.system).toBe('You are an assistant.\n<cite>sources</cite>')
+  })
+
+  test('no citation reinforcement when disabled', () => {
+    const result = buildStepOverrides({
+      ...baseParams,
+      profile: createStubProfile({ citationReinforcementEnabled: 0 }),
+      steps: toolCallSteps(2),
+      messages: [{ role: 'user', content: 'hello' }],
+    })
+    expect(result).toBeUndefined()
+  })
+
+  test('no citation reinforcement without tool calls', () => {
+    const result = buildStepOverrides({
+      ...baseParams,
+      profile: createStubProfile({ citationReinforcementEnabled: 1, citationReinforcementPrompt: '\ncite' }),
+      steps: textSteps(2),
+      messages: [{ role: 'user', content: 'hello' }],
+    })
+    expect(result).toBeUndefined()
+  })
+
+  test('includes citation system on final step when enabled', () => {
+    const profile = createStubProfile({
+      citationReinforcementEnabled: 1,
+      citationReinforcementPrompt: '\ncite!',
+    })
+    const result = buildStepOverrides({
+      ...baseParams,
+      profile,
+      steps: toolCallSteps(19),
+      messages: [{ role: 'user', content: 'hello' }],
+    })
+    expect(result?.system).toBe('You are an assistant.\ncite!')
+    expect(result?.activeTools).toEqual([])
   })
 })

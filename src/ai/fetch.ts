@@ -1,13 +1,14 @@
 import { createPrompt } from '@/ai/prompt'
 import {
+  buildStepOverrides,
   extractTextFromMessages,
-  getNudgeMessages,
+  getNudgeMessagesFromProfile,
   hasToolCalls,
+  inferenceDefaults,
   isFinalStep,
   shouldRetry,
-  shouldShowPreventiveNudge,
 } from '@/ai/step-logic'
-import { getModel, getSettings } from '@/dal'
+import { getModel, getModelProfile, getSettings } from '@/dal'
 import { fetch } from '@/lib/fetch'
 import { createToolset, getAvailableTools } from '@/lib/tools'
 import type { Model, SaveMessagesFunction, ThunderboltUIMessage } from '@/types'
@@ -51,6 +52,7 @@ type AiFetchStreamingResponseOptions = {
   saveMessages: SaveMessagesFunction
   modelId: string
   modeSystemPrompt?: string
+  modeName?: string
   mcpClients?: MCPClient[]
   httpClient?: KyInstance
 }
@@ -118,6 +120,7 @@ export const aiFetchStreamingResponse = async ({
   saveMessages,
   modelId,
   modeSystemPrompt,
+  modeName,
   mcpClients,
   httpClient,
 }: AiFetchStreamingResponseOptions) => {
@@ -149,6 +152,8 @@ export const aiFetchStreamingResponse = async ({
   const model = await getModel(modelId)
 
   if (!model) throw new Error('Model not found')
+
+  const profile = await getModelProfile(modelId)
 
   const supportsTools = model.toolUsage !== 0
 
@@ -190,6 +195,8 @@ export const aiFetchStreamingResponse = async ({
 
   const systemPrompt = createPrompt({
     modelName: model.name,
+    profile,
+    modeName: modeName ?? null,
     preferredName: settings.preferredName,
     location: {
       name: settings.locationName,
@@ -207,7 +214,7 @@ export const aiFetchStreamingResponse = async ({
     modeSystemPrompt,
   })
 
-  const activeNudges = getNudgeMessages(modeSystemPrompt?.includes('SEARCH MODE') ? 'search' : undefined)
+  const activeNudges = getNudgeMessagesFromProfile(profile, modeName)
 
   try {
     const baseModel = await createModel(model)
@@ -223,17 +230,23 @@ export const aiFetchStreamingResponse = async ({
       ],
     })
 
-    const maxSteps = 20
-    const maxAttempts = 2
+    const modelTemperature = profile?.temperature ?? inferenceDefaults.temperature
+    const maxSteps = profile?.maxSteps ?? inferenceDefaults.maxSteps
+    const maxAttempts = profile?.maxAttempts ?? inferenceDefaults.maxAttempts
+    const nudgeThreshold = profile?.nudgeThreshold ?? inferenceDefaults.nudgeThreshold
 
-    // Some models have issues with parallel tool calls - disable based on model configuration
+    // Build provider options from profile + per-model DB settings
     // Uses vendor (actual model maker like 'mistral') for provider options key since the
     // backend recognizes vendor-specific options. Falls back to provider for user-created models.
     // See: https://github.com/vllm-project/vllm/issues/9019
     const providerOptionsKey = model.vendor ?? model.provider
     const rawOptions = {
       ...(model.supportsParallelToolCalls === 0 && { parallelToolCalls: false }),
+      // OpenAI vendor models require systemMessageMode: 'developer' for Chat Completions API.
+      // This is a transport-level requirement (not model tuning), so it's hardcoded as a baseline
+      // rather than relying solely on the profile — custom OpenAI models may not have a profile.
       ...(model.vendor === 'openai' && { systemMessageMode: 'developer' as const }),
+      ...profile?.providerOptions,
     }
     const providerOptions = Object.keys(rawOptions).length > 0 ? { [providerOptionsKey]: rawOptions } : undefined
 
@@ -242,7 +255,7 @@ export const aiFetchStreamingResponse = async ({
      */
     const runStreamText = (inputMessages: Awaited<ReturnType<typeof convertToModelMessages>>) => {
       return streamText({
-        temperature: 0.2,
+        temperature: modelTemperature,
         model: wrappedModel,
         system: systemPrompt,
         messages: inputMessages,
@@ -251,21 +264,18 @@ export const aiFetchStreamingResponse = async ({
         providerOptions,
 
         prepareStep: ({ steps, stepNumber, messages: stepMessages }) => {
-          // Final step: disable tools to force a response
           if (isFinalStep(steps.length, maxSteps)) {
             console.info(`Final step ${stepNumber} - telling model to wrap it up...`)
-            return {
-              activeTools: [],
-              messages: [...stepMessages, { role: 'user' as const, content: activeNudges.finalStep }],
-            }
           }
-
-          // Nudge after many tool calls (but not on final step)
-          if (shouldShowPreventiveNudge(steps)) {
-            return {
-              messages: [...stepMessages, { role: 'user' as const, content: activeNudges.preventive }],
-            }
-          }
+          return buildStepOverrides({
+            steps,
+            messages: stepMessages,
+            systemPrompt,
+            profile,
+            maxSteps,
+            nudgeThreshold,
+            activeNudges,
+          })
         },
 
         abortSignal,
@@ -326,6 +336,9 @@ export const aiFetchStreamingResponse = async ({
         let currentMessages = await convertToModelMessages(messages)
         let attemptNumber = 1
         let isRetry = false
+        // Track tool calls across ALL attempts — a retry may produce no tool calls
+        // but the data from attempt 1's tools is still there to synthesize
+        let anyAttemptHadToolCalls = false
 
         while (attemptNumber <= maxAttempts) {
           const result = runStreamText(currentMessages)
@@ -346,6 +359,7 @@ export const aiFetchStreamingResponse = async ({
             const response = await result.response
             const totalText = extractTextFromMessages(response.messages)
             const hadToolCalls = hasToolCalls(response.messages)
+            anyAttemptHadToolCalls = anyAttemptHadToolCalls || hadToolCalls
 
             // If we got a non-empty response, we're done - send finish event
             if (totalText.trim().length > 0) {
@@ -353,13 +367,19 @@ export const aiFetchStreamingResponse = async ({
               return
             }
 
-            // Empty response detected - prepare for retry if conditions are met
-            if (shouldRetry(totalText, hadToolCalls, attemptNumber, maxAttempts)) {
-              console.info('Empty response detected, retrying with nudge...')
+            // Empty response detected - retry if any attempt gathered tool data
+            if (shouldRetry(totalText, anyAttemptHadToolCalls, attemptNumber, maxAttempts)) {
+              // Escalate urgency on later retries
+              const retryNudge =
+                attemptNumber >= maxAttempts - 1
+                  ? `${activeNudges.retry} This is your final retry — you must produce a non-empty response.`
+                  : activeNudges.retry
+
+              console.info(`Empty response detected, retrying (attempt ${attemptNumber + 1}/${maxAttempts})...`)
               currentMessages = [
                 ...currentMessages,
                 ...response.messages,
-                { role: 'user' as const, content: activeNudges.retry },
+                { role: 'user' as const, content: retryNudge },
               ]
 
               isRetry = true
@@ -367,7 +387,7 @@ export const aiFetchStreamingResponse = async ({
               continue
             }
 
-            // Empty response with no tool calls - send finish event and return
+            // Empty response with no tool calls across any attempt - send finish event and return
             writer.write({ type: 'finish' })
             return
           }

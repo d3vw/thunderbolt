@@ -84,5 +84,14 @@ export {
 // Modes
 export { getAllModes, getDefaultMode, getMode, getSelectedMode } from './modes'
 
+// Model Profiles
+export {
+  createDefaultModelProfile,
+  deleteModelProfileForModel,
+  getModelProfile,
+  resetModelProfileToDefault,
+  upsertModelProfile,
+} from './model-profiles'
+
 // Devices
 export { getAllDevices, getDevice, type Device } from './devices'

@@ -1,3 +1,5 @@
+import type { ModelProfile } from '@/types'
+
 type Step = { finishReason: string }
 
 type Message = {
@@ -80,12 +82,90 @@ export const nudgeMessages: NudgeMessages = {
 /** Mode-specific nudge overrides */
 export const searchModeNudges: NudgeMessages = {
   finalStep:
-    'RESPOND NOW with link preview widgets. Each URL must be unique and point to a specific page (not a homepage). Use <widget:link-preview> tags.',
+    'RESPOND NOW with link preview widgets. Use this exact format: <widget:link-preview url="https://full-url-here" /> — each must have a url attribute with the full URL. No duplicate URLs. No homepages.',
   preventive:
-    'You have enough results. Before responding, verify: no duplicate URLs and no homepage URLs. Then respond with <widget:link-preview> widgets.',
-  retry: 'Respond now with <widget:link-preview> widgets. Each must have a unique, specific-page URL. No more tools.',
+    'You have enough results. Respond now with <widget:link-preview url="https://..." /> widgets. Each MUST include the url attribute with the full page URL.',
+  retry:
+    'Respond now. Output <widget:link-preview url="https://full-url-here" /> for each result. The url attribute is REQUIRED — without it, nothing will render. No more tools.',
 }
 
-/** Get the appropriate nudge messages for a mode */
-export const getNudgeMessages = (modeName?: string): NudgeMessages =>
-  modeName === 'search' ? searchModeNudges : nudgeMessages
+/** Compute the prepareStep overrides for a single step of the agentic loop */
+export const buildStepOverrides = <TMessage>({
+  steps,
+  messages,
+  systemPrompt,
+  profile,
+  maxSteps,
+  nudgeThreshold,
+  activeNudges,
+}: {
+  steps: Step[]
+  messages: TMessage[]
+  systemPrompt: string
+  profile: ModelProfile | null
+  maxSteps: number
+  nudgeThreshold: number
+  activeNudges: NudgeMessages
+}) => {
+  const hadToolCallSteps = steps.some((s) => s.finishReason === 'tool-calls')
+  const citationSystem =
+    profile?.citationReinforcementEnabled === 1 && hadToolCallSteps
+      ? systemPrompt + (profile.citationReinforcementPrompt ?? '')
+      : undefined
+
+  if (isFinalStep(steps.length, maxSteps)) {
+    return {
+      system: citationSystem,
+      activeTools: [] as never[],
+      messages: [...messages, { role: 'user' as const, content: activeNudges.finalStep }],
+    }
+  }
+
+  if (shouldShowPreventiveNudge(steps, nudgeThreshold)) {
+    return {
+      system: citationSystem,
+      messages: [...messages, { role: 'user' as const, content: activeNudges.preventive }],
+    }
+  }
+
+  if (citationSystem) {
+    return { system: citationSystem }
+  }
+}
+
+/** Default inference config applied when no profile override exists */
+export const inferenceDefaults = {
+  temperature: 0.2,
+  maxSteps: 20,
+  maxAttempts: 2,
+  nudgeThreshold: 6,
+} as const
+
+/** Get the appropriate nudge messages from a model profile, falling back to code defaults */
+export const getNudgeMessagesFromProfile = (profile: ModelProfile | null, modeName?: string): NudgeMessages => {
+  const isSearch = modeName === 'search'
+
+  if (!profile) return isSearch ? searchModeNudges : nudgeMessages
+
+  if (isSearch) {
+    const hasSearchOverrides = profile.nudgeSearchFinalStep || profile.nudgeSearchPreventive || profile.nudgeSearchRetry
+    if (hasSearchOverrides) {
+      return {
+        finalStep: profile.nudgeSearchFinalStep ?? searchModeNudges.finalStep,
+        preventive: profile.nudgeSearchPreventive ?? searchModeNudges.preventive,
+        retry: profile.nudgeSearchRetry ?? searchModeNudges.retry,
+      }
+    }
+    return searchModeNudges
+  }
+
+  const hasNudgeOverrides = profile.nudgeFinalStep || profile.nudgePreventive || profile.nudgeRetry
+  if (hasNudgeOverrides) {
+    return {
+      finalStep: profile.nudgeFinalStep ?? nudgeMessages.finalStep,
+      preventive: profile.nudgePreventive ?? nudgeMessages.preventive,
+      retry: profile.nudgeRetry ?? nudgeMessages.retry,
+    }
+  }
+  return nudgeMessages
+}
