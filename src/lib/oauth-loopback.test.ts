@@ -14,7 +14,7 @@ describe('startOAuthFlowLoopback', () => {
   beforeEach(() => {
     unlistenFn = mock()
 
-    spyOn(tauriCore, 'invoke').mockImplementation(async () => 17421)
+    spyOn(tauriCore, 'invoke').mockImplementation(async () => 17421 as never)
     listenSpy = spyOn(tauriEvent, 'listen').mockImplementation(async () => () => {})
     spyOn(opener, 'openUrl').mockImplementation(async () => {})
     spyOn(auth, 'buildAuthUrl').mockImplementation(
