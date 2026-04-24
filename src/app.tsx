@@ -26,6 +26,10 @@ import ModelsPage from '@/settings/models'
 import PreferencesSettingsPage from '@/settings/preferences'
 import TasksPage from '@/tasks'
 import { WaitlistLayout, WaitlistPage } from '@/waitlist'
+import AgentsPage from './agents'
+import AgentRunPage from './agents/agent-run-page'
+import TeamsPage from './teams'
+import TeamRunPage from './teams/team-run-page'
 import AutomationsPage from './automations'
 import { useTriggerScheduler } from './automations/use-trigger-scheduler'
 import { AppErrorScreen } from './components/app-error-screen'
@@ -142,6 +146,10 @@ const AppRoutes = ({ initData }: { initData: InitData }) => {
             <Route path="chats/:chatThreadId" element={<ChatDetailPage />} />
             {experimentalFeatureTasks.value && <Route path="tasks" element={<TasksPage />} />}
             <Route path="automations" element={<AutomationsPage />} />
+            <Route path="agents" element={<AgentsPage />} />
+            <Route path="agents/:agentId" element={<AgentRunPage />} />
+            <Route path="teams" element={<TeamsPage />} />
+            <Route path="teams/:teamId" element={<TeamRunPage />} />
             {import.meta.env.DEV && (
               <Route
                 path="message-simulator"

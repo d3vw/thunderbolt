@@ -9,7 +9,7 @@ import {
   SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar'
-import type { DeleteAllChatsMutationType, DeleteChatMutationType } from '@/layout/sidebar/types'
+import type { AgnoTeamSession, DeleteAllChatsMutationType, DeleteChatMutationType } from '@/layout/sidebar/types'
 import type { MouseEvent, RefObject } from 'react'
 import { useLocation } from 'react-router'
 import { ChatList } from './chat-list'
@@ -21,6 +21,7 @@ type ChatSidebarContentProps = {
   isMobile: boolean
   isCollapsed: boolean
   chatThreads: ChatThread[]
+  agnoTeamSessions: AgnoTeamSession[]
   currentChatThreadId?: string
   searchQuery: string
   debouncedSearchQuery: string
@@ -44,6 +45,7 @@ export const ChatSidebarContent = ({
   isMobile,
   isCollapsed,
   chatThreads,
+  agnoTeamSessions,
   currentChatThreadId,
   searchQuery,
   debouncedSearchQuery,
@@ -87,6 +89,7 @@ export const ChatSidebarContent = ({
 
       <ChatList
         chatThreads={chatThreads}
+        agnoTeamSessions={agnoTeamSessions}
         currentChatThreadId={currentChatThreadId}
         isCollapsed={isCollapsed}
         isMobile={isMobile}

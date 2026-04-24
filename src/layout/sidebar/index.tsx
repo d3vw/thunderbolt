@@ -8,13 +8,17 @@ import { useDebounce } from '@/hooks/use-debounce'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useSettings } from '@/hooks/use-settings'
 import { trackEvent } from '@/lib/posthog'
-import { useMutation } from '@tanstack/react-query'
+import { http } from '@/lib/http'
+import { useMutation, useQuery as useTanstackQuery } from '@tanstack/react-query'
 import { useQuery } from '@powersync/tanstack-react-query'
 import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
 import { ChatSidebarContent } from './chat-sidebar'
 import { SettingsSidebarContent } from './settings-sidebar'
 import { toCompilableQuery } from '@powersync/drizzle-driver'
+import type { AgnoTeamSession } from './types'
+
+const agnoUrl = import.meta.env.VITE_AGNO_URL ?? 'http://localhost:8000'
 
 /**
  * Main sidebar component that orchestrates between chat and settings sidebars
@@ -64,6 +68,20 @@ export default function Sidebar() {
     query: toCompilableQuery(getAllChatThreads(db)),
     placeholderData: (previousData) => previousData,
   })
+
+  const { data: agnoSessionsData } = useTanstackQuery({
+    queryKey: ['agno-team-sessions-sidebar'],
+    queryFn: () =>
+      http
+        .get(`${agnoUrl}/sessions`, {
+          searchParams: { type: 'team', limit: 20, page: 1, sort_by: 'updated_at', sort_order: 'desc' },
+        })
+        .json<{ data: AgnoTeamSession[] }>(),
+    staleTime: 30_000,
+    retry: false,
+  })
+
+  const agnoTeamSessions = agnoSessionsData?.data ?? []
 
   const chatThreads = useMemo(() => {
     if (!data) {
@@ -188,6 +206,7 @@ export default function Sidebar() {
             isMobile={isMobile}
             isCollapsed={isCollapsed}
             chatThreads={chatThreads}
+            agnoTeamSessions={agnoTeamSessions}
             currentChatThreadId={currentChatThreadId}
             searchQuery={searchQuery}
             debouncedSearchQuery={debouncedSearchQuery}

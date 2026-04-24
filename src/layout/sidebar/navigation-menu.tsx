@@ -1,6 +1,6 @@
 import { NavLink } from '@/components/ui/nav-link'
 import { SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar'
-import { CheckSquare, MessageCirclePlus, Settings, Zap } from 'lucide-react'
+import { Bot, CheckSquare, MessageCirclePlus, Settings, Users, Zap } from 'lucide-react'
 
 type NavigationMenuProps = {
   isMobile: boolean
@@ -45,6 +45,22 @@ export const NavigationMenu = ({
           <NavLink to="/automations">
             <Zap className="size-[var(--icon-size-default)]" />
             <span>Automations</span>
+          </NavLink>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton asChild tooltip="Agents" isActive={currentPath.startsWith('/agents')}>
+          <NavLink to="/agents">
+            <Bot className="size-[var(--icon-size-default)]" />
+            <span>Agents</span>
+          </NavLink>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton asChild tooltip="Teams" isActive={currentPath.startsWith('/teams')}>
+          <NavLink to="/teams">
+            <Users className="size-[var(--icon-size-default)]" />
+            <span>Teams</span>
           </NavLink>
         </SidebarMenuButton>
       </SidebarMenuItem>

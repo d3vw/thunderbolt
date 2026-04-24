@@ -8,13 +8,15 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { Flame, Loader2, Search } from 'lucide-react'
+import { Flame, Loader2, Search, Users } from 'lucide-react'
+import { useNavigate, useLocation, useSearchParams } from 'react-router'
 import { ChatActions } from './chat-actions'
 import { ChatListItem } from './chat-list-item'
 import type { ChatListProps } from './types'
 
 export const ChatList = ({
   chatThreads,
+  agnoTeamSessions,
   currentChatThreadId,
   isCollapsed,
   isMobile,
@@ -32,6 +34,11 @@ export const ChatList = ({
   onSearchClick,
   onSearchQueryChange,
 }: ChatListProps) => {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const activeSession = searchParams.get('session')
+
   return (
     <>
       <SidebarGroup className="flex-1 flex flex-col min-h-0">
@@ -106,6 +113,35 @@ export const ChatList = ({
             <div className="text-center text-sm py-12 px-4 text-muted-foreground">
               No matches for "{debouncedSearchQuery}"
             </div>
+          )}
+
+          {agnoTeamSessions.length > 0 && (
+            <>
+              {!isCollapsed && (chatThreads.length > 0 || debouncedSearchQuery) && (
+                <div className="px-2 pt-4 pb-1 text-xs font-medium text-muted-foreground/60 uppercase tracking-wide">
+                  Teams
+                </div>
+              )}
+              {agnoTeamSessions.map((session) => {
+                const isActive =
+                  location.pathname === `/teams/${session.team_id}` && activeSession === session.session_id
+                return (
+                  <SidebarMenuItem key={session.session_id}>
+                    <SidebarMenuButton
+                      onClick={() => navigate(`/teams/${session.team_id}?session=${session.session_id}`)}
+                      isActive={isActive}
+                      tooltip={session.session_name || session.session_id}
+                      className="cursor-pointer"
+                    >
+                      <Users className="size-[var(--icon-size-default)] shrink-0" />
+                      {!isCollapsed && (
+                        <span className="truncate flex-1 min-w-0">{session.session_name || session.session_id}</span>
+                      )}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              })}
+            </>
           )}
         </SidebarMenu>
       </SidebarGroup>

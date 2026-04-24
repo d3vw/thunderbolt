@@ -41,6 +41,7 @@ import {
 } from 'ai'
 import { type MCPClient } from '@ai-sdk/mcp'
 import { createMessageMetadata } from './message-metadata'
+import { toolCallsMiddleware } from './middleware/tool-calls'
 
 export const ollama = createOpenAI({
   baseURL: 'http://localhost:11434/v1',
@@ -245,6 +246,7 @@ export const aiFetchStreamingResponse = async ({
       providerId: model.provider,
       model: baseModel,
       middleware: [
+        toolCallsMiddleware,
         extractReasoningMiddleware({
           tagName: 'think',
           startWithReasoning: Boolean(model.startWithReasoning),

@@ -1,4 +1,4 @@
-import type { LanguageModelV2Middleware, LanguageModelV2StreamPart } from '@ai-sdk/provider'
+import type { LanguageModelV3Middleware, LanguageModelV3StreamPart } from '@ai-sdk/provider'
 import { generateId } from 'ai'
 import type { TransformStreamDefaultController } from 'stream/web'
 
@@ -28,7 +28,7 @@ const parseToolNameAndId = (raw: string): { toolName: string; toolCallId: string
 }
 
 /** Parse the content accumulated inside a <|tool_call_begin|> … <|tool_call_end|> block. */
-const emitToolCall = (content: string, controller: TransformStreamDefaultController<LanguageModelV2StreamPart>) => {
+const emitToolCall = (content: string, controller: TransformStreamDefaultController<LanguageModelV3StreamPart>) => {
   const argIdx = content.indexOf(argBeginSentinel)
   const headerPart = (argIdx === -1 ? content : content.slice(0, argIdx)).trim()
   const argsRaw = argIdx === -1 ? '' : content.slice(argIdx + argBeginSentinel.length).trim()
@@ -50,7 +50,8 @@ type StackNode = { name: string; content: string }
 /**
  * Middleware to parse tool calls (eg <|tool_call_begin|> … <|tool_call_end|>) from the streaming response.
  */
-export const toolCallsMiddleware: LanguageModelV2Middleware = {
+export const toolCallsMiddleware: LanguageModelV3Middleware = {
+  specificationVersion: 'v3',
   /** Intercept the streaming response so we can parse tool-call blocks. */
   wrapStream: async ({ doStream }) => {
     const { stream, ...rest } = await doStream()
@@ -73,7 +74,7 @@ export const toolCallsMiddleware: LanguageModelV2Middleware = {
     }
 
     /** Helper: flush the text buffer downstream if we are at root level. */
-    const flushTextIfPossible = (controller: TransformStreamDefaultController<LanguageModelV2StreamPart>) => {
+    const flushTextIfPossible = (controller: TransformStreamDefaultController<LanguageModelV3StreamPart>) => {
       if (stack.length === 0 && textBuffer.length > 0) {
         controller.enqueue({ type: 'text', text: textBuffer } as any)
         textBuffer = ''
@@ -81,7 +82,7 @@ export const toolCallsMiddleware: LanguageModelV2Middleware = {
     }
 
     /** Handle a completed tag token. */
-    const handleToken = (token: string, controller: TransformStreamDefaultController<LanguageModelV2StreamPart>) => {
+    const handleToken = (token: string, controller: TransformStreamDefaultController<LanguageModelV3StreamPart>) => {
       // If we're currently inside a tool_call, copy everything literally until
       // we see its corresponding _end tag.  This prevents nested tags (such as
       // <|tool_call_argument_begin|>) from being interpreted by our parser.
@@ -124,8 +125,8 @@ export const toolCallsMiddleware: LanguageModelV2Middleware = {
 
     const transform = new TransformStream<any, any>({
       transform(
-        chunk: LanguageModelV2StreamPart,
-        controller: TransformStreamDefaultController<LanguageModelV2StreamPart>,
+        chunk: LanguageModelV3StreamPart,
+        controller: TransformStreamDefaultController<LanguageModelV3StreamPart>,
       ) {
         if ((chunk as any).type !== 'text') {
           controller.enqueue(chunk as any)
@@ -196,7 +197,7 @@ export const toolCallsMiddleware: LanguageModelV2Middleware = {
         flushTextIfPossible(controller)
       },
 
-      flush(controller: TransformStreamDefaultController<LanguageModelV2StreamPart>) {
+      flush(controller: TransformStreamDefaultController<LanguageModelV3StreamPart>) {
         // Flush any dangling tagBuffer as literal text
         if (tagBuffer.length > 0) {
           appendText(tagBuffer)

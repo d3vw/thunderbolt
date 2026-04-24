@@ -9,6 +9,14 @@ export type ChatThread = {
   isEncrypted: number
 }
 
+export type AgnoTeamSession = {
+  session_id: string
+  session_name: string
+  team_id: string
+  updated_at: string
+  total_tokens: number
+}
+
 export type DeleteChatMutationType = UseMutationResult<void, Error, { id: string }, unknown>
 
 export type DeleteAllChatsMutationType = UseMutationResult<void, Error, void, unknown>
@@ -23,6 +31,7 @@ export type ChatActionsProps = {
 
 export type ChatListProps = {
   chatThreads: ChatThread[]
+  agnoTeamSessions: AgnoTeamSession[]
   currentChatThreadId?: string
   isCollapsed: boolean
   isMobile: boolean
